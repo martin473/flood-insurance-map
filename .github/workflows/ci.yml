@@ -43,22 +43,22 @@ jobs:
       - if: failure()
         run: docker logs api 2>&1 || true
 
-  stack:
-    # Runs the droplet setup (deploy/docker-compose.yml: Caddy + API) and checks the map and API
-    # through Caddy, so a broken deploy is caught here instead of on the server.
+  droplet:
+    # Runs deploy/droplet.sh exactly as on the droplet (as root, systemd service, no Docker),
+    # deploying the commit under test, then checks the map and API it serves.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Start the stack
+      - name: Run the droplet deploy script
         run: |
-          printf 'SITE_ADDRESS=:80\nFLOODRULES_ADMIN_TOKEN=ci-token\n' > deploy/.env
-          docker compose -f deploy/docker-compose.yml up -d --build
-      - name: Check the map and API through Caddy
+          curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/deploy/droplet.sh" -o droplet.sh
+          sudo -H env REF=${{ github.sha }} bash droplet.sh
+      - name: Check the map and API it serves
         run: |
-          for i in $(seq 1 40); do curl -fsS localhost/api/health && break; sleep 2; done
-          echo "check: /api/health"; curl -fsS localhost/api/health | grep '"ok":true'
-          echo "check: map at /"; curl -fsS localhost/ | grep -q '<title>Rhode Island Flood Outlook</title>'
-          echo "check: map points at /api"; curl -fsS localhost/ | grep -q 'name="flood-api" content="/api"'
-          echo "check: /api/metrics"; curl -fsS localhost/api/metrics | grep -q '"fema_nfhl"'
+          echo "check: /api/health"; curl -fsS localhost:8080/api/health | grep '"ok":true'
+          echo "check: map at /"; curl -fsS localhost:8080/ | grep -q '<title>Rhode Island Flood Outlook</title>'
+          echo "check: map points at /api"; curl -fsS localhost:8080/ | grep -q 'name="flood-api" content="/api"'
+          echo "check: /api/metrics"; curl -fsS localhost:8080/api/metrics | grep -q '"fema_nfhl"'
+          echo "check: service restarts on failure"; sudo systemctl kill flood-insurance-map; sleep 6; curl -fsS localhost:8080/api/health | grep -q '"ok":true'
+          echo "check: rerunning updates in place"; sudo -H env REF=${{ github.sha }} bash droplet.sh | tail -3
       - if: failure()
-        run: docker compose -f deploy/docker-compose.yml logs 2>&1 | tail -100
+        run: sudo journalctl -u flood-insurance-map -n 100 --no-pager || true

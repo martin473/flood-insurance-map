@@ -1,20 +1,28 @@
 # Deploying
 
-## On your own droplet (simplest)
+## On your own droplet (simplest, no Docker)
 
-`deploy/droplet.sh` sets everything up under `~/portfolio-projects/flood-insurance-map` on the server: it installs Docker if needed, clones the repo, creates `deploy/.env` with a random admin token, and starts two containers. Caddy serves the map at `/` and the API at `/api`. CI runs this same setup on every push and checks the map and API through Caddy.
+`deploy/droplet.sh` sets everything up under `~/portfolio-projects/flood-insurance-map` on the server:
 
-From your Mac, in the `flood-rules` folder:
+- clones the repo, or updates it if it's already there
+- installs Python 3.12 into a virtual environment, using `uv`
+- creates `deploy/.env` with a random admin token
+- installs a systemd service that serves the map at `/` and the API at `/api` on port 8080, and restarts it if it crashes
+- opens port 8080 if the `ufw` firewall is on
+
+CI runs this same script as root on a fresh Ubuntu machine on every push, and checks the map, the API and a restart.
+
+From any terminal on your Mac:
 
 ```bash
-ssh root@<droplet-ip> 'bash -s' < deploy/droplet.sh
+curl -fsSL https://raw.githubusercontent.com/martin473/flood-insurance-map/main/deploy/droplet.sh | ssh root@<droplet-ip> 'bash -s'
 ```
 
-SSH asks for your key's passphrase as usual. When it finishes, it prints the address to open. Run the same command again to update to the latest commit.
+SSH asks for your key's passphrase as usual. When it finishes, open `http://<droplet-ip>:8080`. Run the same command again to update to the latest commit.
 
-- **HTTPS:** point a domain name (e.g. `flood.sawyersweet.net`) at the droplet's IP, set `SITE_ADDRESS=flood.sawyersweet.net` in `~/portfolio-projects/flood-insurance-map/deploy/.env` on the server, and rerun the script. Caddy gets the certificate automatically.
-- **Firewall:** if the droplet uses `ufw`, allow web traffic with `ufw allow 80,443/tcp`.
-- **Not root?** Run the script with a user that can use `sudo` and Docker.
+- **Logs:** `journalctl -u flood-insurance-map -f` on the droplet
+- **Another port:** put `PORT=9000` before `bash -s`, as in `ssh root@<ip> 'PORT=9000 bash -s'`
+- **A domain with HTTPS:** point the domain at the droplet and have your existing web server proxy to `localhost:8080`
 
 ## On DigitalOcean App Platform
 
