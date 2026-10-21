@@ -50,6 +50,16 @@ def cmd_fetch(args) -> int:
     return 0
 
 
+def cmd_models(args) -> int:
+    from .ollama import Ollama
+    client = Ollama(model="")
+    names = client.list_models()
+    print(f"{len(names)} models at {client.host}:")
+    for n in names:
+        print(f"  ollama:{n}")
+    return 0
+
+
 def cmd_extract(args) -> int:
     doc = read_pdf(args.pdf)
     run = run_extraction(doc, make_extractor(args.model), cache_dir=CACHE)
@@ -107,7 +117,7 @@ def _pct(x: float | None) -> str:
 
 def _cost(c: dict | None, model: str = "") -> str:
     if model.startswith("ollama:"):
-        return "$0 (local)" if c else "n/a"
+        return "no per-token cost" if c else "n/a"
     return "n/a" if not c or c.get("cost_usd") is None else f"${c['cost_usd']:.4f}"
 
 
@@ -178,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="floodrules")
     p.add_argument("--sources", default=str(ROOT / "evals" / "sources.json"))
     sub = p.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("models", help="list the Ollama models available (Ollama Cloud when OLLAMA_API_KEY is set)").set_defaults(fn=cmd_models)
     sub.add_parser("fetch", help="download the eval PDFs listed in evals/sources.json").set_defaults(fn=cmd_fetch)
     e = sub.add_parser("extract", help="extract and verify rules from one PDF")
     e.add_argument("pdf")

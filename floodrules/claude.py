@@ -56,7 +56,7 @@ class Usage:
 
     def cost_usd(self, model: str) -> float | None:
         if model.startswith("ollama:"):
-            return 0.0   # runs locally; no per-token charge
+            return 0.0   # Ollama Cloud plans and local runs have no per-token charge
         rates = PRICING.get(model)
         if rates is None:
             return None
