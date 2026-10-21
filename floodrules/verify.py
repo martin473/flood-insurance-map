@@ -79,7 +79,9 @@ class Verifier:
 
             av_ev = data.availability.evidence
             ok, page, why = self.find(av_ev)
-            if ok and av_ev is not None:
+            if data.availability.mode == "not_stated":
+                pass   # nothing was claimed, so there's nothing to verify
+            elif ok and av_ev is not None:
                 self._keep(report, av_ev, page)
             else:
                 report.rejected.append(Rejection(label, "availability", f"{data.availability.mode} {data.availability.states}",
@@ -90,6 +92,10 @@ class Verifier:
                 kept = []
                 for item in getattr(data, fname):
                     ok, page, why = self.find(item.evidence)
+                    if ok and fname == "limits" and item.evidence is not None and item.amount_usd not in money_values(item.evidence.quote):
+                        # The quote exists but doesn't state this amount: the model calculated or guessed it,
+                        # e.g. "20% of the dwelling limit" written as $450,000.
+                        ok, why = False, f"quote doesn't state ${item.amount_usd:,}"
                     if ok and item.evidence is not None:
                         self._keep(report, item.evidence, page)
                         kept.append(item)
@@ -106,6 +112,19 @@ class Verifier:
         if page is not None and page != ev.page:
             ev.page = page
             report.page_corrected += 1
+
+
+_MONEY = re.compile(r"\$?\s*(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(million|mil|mm|m|thousand|k)?\b", re.I)
+_SCALE = {"million": 1_000_000, "mil": 1_000_000, "mm": 1_000_000, "m": 1_000_000, "thousand": 1_000, "k": 1_000}
+
+
+def money_values(text: str) -> set[int]:
+    """Every dollar amount written in the text: $1,250,000, 1.25M, $2.5 million, 250K, 30,000."""
+    out = set()
+    for num, unit in _MONEY.findall(text):
+        value = float(num.replace(",", ""))
+        out.add(round(value * _SCALE.get(unit.lower(), 1)) if unit else round(value))
+    return out
 
 
 def _describe(item) -> str:

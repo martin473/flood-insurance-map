@@ -21,7 +21,7 @@ from .schema_export import tool_schema
 from .schemas import Extraction
 from .verify import Verifier, VerifyReport
 
-PROMPT_VERSION = "2026-10-21.3"
+PROMPT_VERSION = "2026-10-21.4"
 
 SYSTEM = """You extract eligibility rules for private flood insurance programs from underwriting guides, \
 brochures and broker comparison sheets, for a tool that tells homeowners which insurers might cover a property.
@@ -33,7 +33,7 @@ Rules:
 - Availability: use all_except with the excluded states when the document says "all states except", only_listed when it lists the states where the program is sold.
 - Location exclusions are about where the building is (CBRA or Coastal Barrier zones, floodways, over water, islands, barrier islands). Property exclusions are about the building or its history (condos, manufactured or mobile homes, prior losses, severe repetitive loss, contents below grade, NFIP grandfathered rating).
 - Zone conditions describe which FEMA zones are eligible and under what condition. Use only the letters A, V, B, C, X, D: map AE/AH/AO/AR/A99 to A, VE to V, and shaded or unshaded X to X.
-- Limits: only fixed dollar maximums, as whole numbers of dollars (1250000, not "$1.25M"). Skip limits expressed as a percentage. Kinds: dwelling (building coverage), contents (personal property), other_structures, loss_of_use (additional living expenses), total_insured_value, increased_cost_of_compliance.
+- Limits: only fixed dollar maximums, as whole numbers of dollars (1250000, not "$1.25M"). Skip limits expressed as a percentage, and never calculate a dollar amount from a percentage; the quote must contain the amount. Kinds: dwelling (building coverage), contents (personal property), other_structures, loss_of_use (additional living expenses), total_insured_value, increased_cost_of_compliance.
 - States are two-letter postal codes.
 - If the text starts with an <excerpt> tag, it is part of a longer document. Record only what these pages state, and name each program as the pages do; results from all excerpts are merged afterwards.
 Always answer by calling the record_eligibility_rules tool exactly once."""
