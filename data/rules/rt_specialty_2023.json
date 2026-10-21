@@ -5,18 +5,18 @@
   "published": "2023-04"
  },
  "extracted": {
-  "at": "2026-10-21T23:35:01+00:00",
+  "at": "2026-10-21T23:36:27+00:00",
   "model": "ollama:gpt-oss:120b",
   "prompt_version": "2026-10-21.4"
  },
  "verification": {
-  "kept": 18,
-  "rejected": 5,
+  "kept": 15,
+  "rejected": 4,
   "page_corrected": 0
  },
  "products": [
   {
-   "insurer": "RT Specialty",
+   "insurer": "FloodPlus",
    "program": "FloodPlus",
    "availability": {
     "mode": "all_except",
@@ -68,17 +68,9 @@
     },
     {
      "kind": "prior_losses",
-     "detail": "more than 1 loss OR 1 loss >$25k",
+     "detail": "more than 1 loss or a single loss over $25k",
      "evidence": {
       "quote": "Properties with > 1 loss OR 1 loss >$25k",
-      "page": 1
-     }
-    },
-    {
-     "kind": "nfip_grandfathered",
-     "detail": "Grandfathered or CBRA properties",
-     "evidence": {
-      "quote": "Grandfathered or CBRA properties",
       "page": 1
      }
     }
@@ -102,18 +94,18 @@
      }
     },
     {
-     "kind": "other_structures",
-     "amount_usd": 125000,
-     "evidence": {
-      "quote": "Other Structures $125,000",
-      "page": 1
-     }
-    },
-    {
      "kind": "loss_of_use",
      "amount_usd": 250000,
      "evidence": {
       "quote": "Loss Of Use $250,000",
+      "page": 1
+     }
+    },
+    {
+     "kind": "other_structures",
+     "amount_usd": 125000,
+     "evidence": {
+      "quote": "Other Structures $125,000",
       "page": 1
      }
     }
@@ -122,14 +114,13 @@
  ],
  "review": {
   "published": [
-   "RT Specialty / FloodPlus"
+   "FloodPlus / FloodPlus"
   ],
   "held": [
    {
     "program": "Neptune Flood / Neptune Flood",
     "why": "differs from the reviewed labels",
     "extra": [
-     "location:floodway",
      "sold_in_RI:not_stated"
     ],
     "missing": [
