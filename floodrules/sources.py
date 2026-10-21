@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import statistics
 import threading
 import time
 from dataclasses import dataclass, field
@@ -28,9 +29,12 @@ STORM = "https://maps.edc.uri.edu/stormtools/rest/services/Stormtools2020/Mosaic
 NOMINATIM = "https://nominatim.openstreetmap.org/reverse"
 USER_AGENT = os.environ.get("FLOODRULES_USER_AGENT", "flood-insurance-map/0.1 (github.com/martin473/flood-insurance-map)")
 
-# STORMTOOLS raster IDs 1..6 = 0, 2, 3, 5, 7, 10 ft of sea level rise. Years are when each rise is
-# reached on the NOAA high curve for Newport that the RI Coastal Resources Management Council uses.
-SCENARIOS = [(1, 0, "today"), (2, 2, "2040"), (3, 3, "2050"), (4, 5, "2070"), (5, 7, "2085"), (6, 10, "2100")]
+# STORMTOOLS raster IDs 1..6 = 0, 2, 3, 5, 7, 10 ft of sea level rise (per the service's own description).
+# Years are when each rise is reached at the Newport tide gauge under NOAA's 2022 High scenario, the
+# projection the RI Coastal Resources Management Council requires in its coastal hazard worksheets:
+# 2050 1.60 ft, 2060 2.29, 2070 3.17, 2080 4.19, 2090 5.35, 2100 6.47 (linear in between).
+# 7 and 10 ft aren't reached by 2100 under that scenario.
+SCENARIOS = [(1, 0, "today"), (2, 2, "2056"), (3, 3, "2068"), (4, 5, "2087"), (5, 7, "after-2100"), (6, 10, "worst-case")]
 
 Transport = Callable[[str, dict[str, Any], dict[str, str], float], tuple[int, Any]]
 
@@ -163,8 +167,9 @@ class Sources:
         return {"unit": a.get("Unit"), "type": a.get("CBRS_Type"), "flood_insurance_date": fi_date}
 
     def storm_depths(self, lat: float, lng: float) -> list[float]:
-        """Deepest water within ~20 m of the point for each scenario. The raster has no-data gaps on
-        beaches and dunes, so a single-pixel lookup can call an oceanfront lot dry."""
+        """Water depth at the point for each scenario. The raster has no-data gaps on beaches and dunes,
+        so when the point itself has no value, the median of eight samples ~20 m around it is used
+        (the median, not the deepest, so a lot next to open water isn't given the water's depth)."""
         dl, dg = 0.00018, 0.00024
         offsets = [(0, 0), (dl, 0), (-dl, 0), (0, dg), (0, -dg), (dl, dg), (-dl, -dg), (dl, -dg), (-dl, dg)]
         geometry = json.dumps({"points": [[lng + o[1], lat + o[0]] for o in offsets], "spatialReference": {"wkid": 4326}})
@@ -176,15 +181,20 @@ class Sources:
             if isinstance(data, dict) and data.get("error"):
                 out.append(0.0)   # STORMTOOLS answers with an error when every sample is no-data: dry
                 continue
-            values = []
+            center, around = None, []
             for s in data.get("samples", []):
                 try:
                     v = float(s.get("value"))
                 except (TypeError, ValueError):
                     continue
-                if v > 0:
-                    values.append(v)
-            out.append(round(max(values), 1) if values else 0.0)
+                if v <= 0:
+                    continue
+                if s.get("locationId") == 0:
+                    center = v
+                else:
+                    around.append(v)
+            value = center if center is not None else (statistics.median(around) if around else 0.0)
+            out.append(round(value, 1))
         return out
 
     def town_name(self, lat: float, lng: float) -> str:

@@ -6,10 +6,11 @@ import pytest
 from floodrules import costs
 
 
-def pol(cost, zone="AE", geo="440090501001", day="2026-06-01", occ=11, condo="N", term=1, town="WESTERLY, TOWN OF"):
+def pol(cost, zone="AE", geo="440090501001", day="2026-06-01", occ=11, condo="N", term=1, town="WESTERLY, TOWN OF", cancelled=None):
     return {"policyEffectiveDate": f"{day}T00:00:00.000Z", "policyCost": cost, "totalInsurancePremiumOfThePolicy": cost - 300,
             "ratedFloodZone": zone, "censusGeoid": geo, "occupancyType": occ, "condominiumCoverageTypeCode": condo,
-            "policyTermIndicator": term, "nfipCommunityName": town}
+            "policyTermIndicator": term, "nfipCommunityName": town, "cancellationDateOfFloodPolicy": cancelled,
+            "asOfDate": "2026-07-10T00:00:00.000Z"}
 
 
 def test_zone_group():
@@ -32,6 +33,7 @@ def test_keep_filters_non_single_family_condos_and_refunds():
     assert not costs.keep(pol(1000, condo="U"))
     assert not costs.keep(pol(1000, term=9))
     assert not costs.keep(pol(-50))
+    assert not costs.keep(pol(1000, cancelled="2026-02-01"))
 
 
 def test_stats():
@@ -46,9 +48,11 @@ def test_summarize_flood_groups_and_hides_small_groups():
     rows += [pol(800, zone="X") for _ in range(3)]                        # same tract, other zone: too few
     rows += [pol(5000, day="2024-01-01") for _ in range(20)]              # older than the 12-month window
     rows += [pol(900, occ=18) for _ in range(20)]                         # not single-family
-    rows += [pol(9000, day="2026-07-15") for _ in range(20)]              # renewals booked ahead of "today"
-    out = costs.summarize_flood(rows, min_n=10, today=date(2026, 6, 1))
-    assert out["window"] == {"from": "2025-06-02", "to": "2026-06-01"}
+    rows += [pol(9000, day="2026-07-15") for _ in range(20)]              # snapshot month (partial) and renewals booked ahead
+    rows += [pol(9000, cancelled="2026-06-20") for _ in range(20)]        # cancelled
+    out = costs.summarize_flood(rows, min_n=10, today=date(2026, 10, 21))
+    # FEMA's snapshot is 2026-07-10, so the window is the 12 complete months before July 2026
+    assert out["window"] == {"from": "2025-07-01", "to": "2026-06-30"} and out["snapshot"] == "2026-07-10"
     assert out["policies"] == 15
     assert out["tract"]["44009050100|high"]["n"] == 12
     assert out["tract"]["44009050100|high"]["median"] == 1550
@@ -151,3 +155,10 @@ def test_cli_costs_writes_file_or_refuses(tmp_path, monkeypatch, capsys):
     out.unlink()
     assert cli.main(["costs", "--out", str(out)]) == 1
     assert not out.exists()
+
+
+def test_summarize_homeowners_reports_the_national_nonrenewal_spread():
+    rows = [(1000 + i, 2022, 1500, i / 1000) for i in range(100)] + [(2891, 2022, 3041, 0.0072), (2891, 2021, 2900, 0.5)]
+    out = costs.summarize_homeowners(rows, 2801, 2940)
+    nat = out["national_nonrenewal_pct"]
+    assert nat["zips"] == 101 and 4.0 <= nat["median"] <= 5.5 and 8.5 <= nat["p90"] <= 9.5

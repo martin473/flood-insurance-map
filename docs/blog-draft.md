@@ -47,7 +47,7 @@ When the agent finally tested the map against the live data services, it found t
 ## What I'd point to in the agent's work
 
 - **What I kept:** the quote check, the item-by-item repair, testing against recorded responses so CI never calls a model, and the eval report that lists every miss by name.
-- **What I rejected or redirected:** a six-layer map that answered nothing; zip files as a delivery mechanism (we moved to a GitHub repo with CI); and the claim that "almost every property can get insurance." I asked about Florida, where insurers have been leaving, and the honest answer had two caveats the agent hadn't mentioned: the federal program's authorization expires December 12, 2026, and "available" isn't "affordable." 
+- **What I rejected or redirected:** a six-layer map that answered nothing; zip files as a delivery mechanism (we moved to a GitHub repo with CI); and the claim that "almost every property can get insurance." I asked about Florida, where insurers have been leaving, and the honest answer had two caveats the agent hadn't mentioned: the federal program's authorization expires December 11, 2026, and "available" isn't "affordable." 
 - **What I had to check myself:** the labels. The agent wrote the first labels from summaries of the PDFs, and said so in every label file. Checking them against the documents moved precision from [before] to [after], because some of the model's "extra" findings were right and my labels were wrong.
 
 ## How it runs

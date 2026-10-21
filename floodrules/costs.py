@@ -4,12 +4,14 @@ No model and no scraping logic, just two fixed downloads:
 
 * Flood: FEMA's NFIP Redacted Policies v3 (OpenFEMA API), every federal flood policy with its
   cost, flood zone and census block group. We keep single-family, non-condo, one-year policies
-  that started in the most recent 12 months of data, and summarize what they cost
+  that weren't cancelled and started in the last 12 complete months before FEMA's data snapshot
+  (its asOfDate), and summarize what they cost
   (premium plus the fees and surcharges on the bill) by census tract and flood zone, with town
   and county as fallbacks for tracts with too few policies.
 * Homeowners: the Treasury Federal Insurance Office's ZIP-level homeowners data (2018-2022),
   removed from Treasury's site in 2025 and re-hosted by the Consumer Federation of America.
-  It publishes an average premium per policy per ZIP, so that's what we report.
+  It publishes an average premium per policy per ZIP, so that's what we report, along with the
+  ZIP's non-renewal rate and the national median and 90th percentile for comparison.
 
 The output is one small JSON file the map loads: map/data/ri-costs.json.
 """
@@ -42,6 +44,7 @@ FIO_PAGE = (
 FIELDS = [
     "policyEffectiveDate", "policyCost", "totalInsurancePremiumOfThePolicy", "ratedFloodZone",
     "censusGeoid", "occupancyType", "condominiumCoverageTypeCode", "policyTermIndicator", "nfipCommunityName",
+    "cancellationDateOfFloodPolicy", "asOfDate",
 ]
 SINGLE_FAMILY = {1, 11}       # 1 = legacy rating, 11 = Risk Rating 2.0
 MIN_POLICIES = 10             # fewer than this and a group isn't shown
@@ -112,8 +115,9 @@ def _day(s: str | None) -> date | None:
 
 
 def keep(p: dict) -> bool:
-    """Single-family homes, not condos, one-year policies with a positive bill."""
+    """Single-family homes, not condos, one-year policies with a positive bill that weren't cancelled."""
     return (p.get("occupancyType") in SINGLE_FAMILY
+            and not p.get("cancellationDateOfFloodPolicy")
             and (p.get("condominiumCoverageTypeCode") or "N") == "N"
             and p.get("policyTermIndicator") == 1
             and (p.get("policyCost") or 0) > 0
@@ -130,11 +134,16 @@ def stats(values: list[float]) -> dict[str, int]:
 def summarize_flood(policies: Iterable[dict], months: int = 12, min_n: int = MIN_POLICIES, today: date | None = None) -> dict[str, Any]:
     """One year of policies, so each insured home counts about once (they renew yearly).
 
-    The window ends at today, or at the newest policy if FEMA's data stops earlier. Renewals
-    booked ahead with future start dates are left out."""
+    The window is the last `months` complete calendar months before FEMA's data snapshot (the
+    records' asOfDate), or before `today` if that's earlier. The snapshot's own month is partial
+    and later months hold only renewals booked ahead, so both are left out."""
     today = today or datetime.now(timezone.utc).date()
     rows = []
+    snapshot: date | None = None
     for p in policies:
+        a = _day(p.get("asOfDate"))
+        if a and (snapshot is None or a > snapshot):
+            snapshot = a
         d = _day(p.get("policyEffectiveDate"))
         g = zone_group(p.get("ratedFloodZone"))
         geo = str(p.get("censusGeoid") or "")
@@ -142,12 +151,14 @@ def summarize_flood(policies: Iterable[dict], months: int = 12, min_n: int = MIN
             rows.append((d, g, geo, town_name(p.get("nfipCommunityName")), float(p["policyCost"])))
     if not rows:
         raise ValueError("no usable policies; the dataset or its fields may have changed")
-    rows = [r for r in rows if r[0] <= today]
+    cutoff = min(snapshot or today, today)
+    end = cutoff.replace(day=1) - timedelta(days=1)                       # last day of the previous month
+    start = end.replace(day=1)
+    for _ in range(months - 1):
+        start = (start - timedelta(days=1)).replace(day=1)
+    rows = [r for r in rows if start <= r[0] <= end]
     if not rows:
-        raise ValueError("no policies on or before today")
-    latest = max(r[0] for r in rows)
-    start = latest - timedelta(days=round(months * 365.25 / 12)) + timedelta(days=1)
-    rows = [r for r in rows if r[0] >= start]
+        raise ValueError(f"no policies between {start} and {end}")
 
     groups: dict[str, dict[str, list[float]]] = {"tract": defaultdict(list), "town": defaultdict(list), "county": defaultdict(list)}
     for _, g, geo, town, cost in rows:
@@ -157,7 +168,8 @@ def summarize_flood(policies: Iterable[dict], months: int = 12, min_n: int = MIN
         if town:
             groups["town"][f"{town}|{g}"].append(cost)
     out: dict[str, Any] = {
-        "window": {"from": start.isoformat(), "to": latest.isoformat()},
+        "window": {"from": start.isoformat(), "to": end.isoformat()},
+        "snapshot": snapshot.isoformat() if snapshot else None,
         "policies": len(rows),
         "min_policies": min_n,
     }
@@ -168,9 +180,16 @@ def summarize_flood(policies: Iterable[dict], months: int = 12, min_n: int = MIN
 
 
 def summarize_homeowners(rows: Iterable[tuple], zip_lo: int, zip_hi: int) -> dict[str, Any]:
-    """Latest year's average premium per policy for each ZIP in [zip_lo, zip_hi]. ZIPs come as numbers (leading zero dropped)."""
+    """Latest year's average premium per policy and non-renewal rate for each ZIP in [zip_lo, zip_hi],
+    plus the national median and 90th percentile non-renewal rate that year. ZIPs come as numbers."""
+    rows = list(rows)
     by_zip: dict[str, tuple[int, float, float | None]] = {}
+    national: dict[int, list[float]] = defaultdict(list)
     for z, year, prem, nonrenew in rows:
+        try:
+            national[int(year)].append(float(nonrenew))
+        except (TypeError, ValueError):
+            pass
         try:
             zi, yi, pf = int(z), int(year), float(prem)
         except (TypeError, ValueError):
@@ -182,8 +201,13 @@ def summarize_homeowners(rows: Iterable[tuple], zip_lo: int, zip_hi: int) -> dic
             by_zip[key] = (yi, pf, float(nonrenew) if nonrenew is not None else None)
     if not by_zip:
         raise ValueError("no ZIPs in range; the spreadsheet layout may have changed")
+    year = max(v[0] for v in by_zip.values())
+    nat = sorted(national.get(year, []))
+    deciles = statistics.quantiles(nat, n=10) if len(nat) >= 10 else None
     return {
-        "year": max(v[0] for v in by_zip.values()),
+        "year": year,
+        "national_nonrenewal_pct": None if not deciles else {
+            "median": round(statistics.median(nat) * 100, 2), "p90": round(deciles[8] * 100, 2), "zips": len(nat)},
         "zip": {k: {"year": y, "avg": round(p), "nonrenewal_pct": None if n is None else round(n * 100, 2)}
                 for k, (y, p, n) in sorted(by_zip.items())},
     }

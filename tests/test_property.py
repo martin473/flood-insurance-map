@@ -69,8 +69,9 @@ class Recorded:
             depth = s["depths"][rid - 1]
             if not depth:
                 return 200, {"error": {"code": 400, "message": "Invalid or missing input parameters."}}
-            # neighbors vary; the deepest one should win
-            return 200, {"samples": [{"value": str(depth - 0.4)}, {"value": str(depth)}, {"value": "NoData"}]}
+            # neighbors vary (one is deeper, next to the water); the point's own value should win
+            return 200, {"samples": [{"locationId": 1, "value": str(depth + 1.5)}, {"locationId": 0, "value": str(depth)},
+                                     {"locationId": 2, "value": "NoData"}]}
         if url == NOMINATIM:
             s = self.spot(params["lon"], params["lat"])
             return 200, {"address": {"town" if s["town"] != "Newport" else "city": s["town"], "state": "Rhode Island"}}
@@ -85,15 +86,15 @@ def rules():
     return [neptune, hiscox, msi]
 
 
-def report(name, products=None, transport=None, year="2050"):
+def report(name, products=None, transport=None, year="2056"):
     s = SPOTS[name]
     return assess(s["lat"], s["lng"], Sources(transport or Recorded(), sleep=lambda x: None), products or [], year=year)
 
 
 EXPECTED = {
-    "misquamicut":   ("Yes", "Limited", "Yes, but harder", True),
-    "napatree":      ("Likely", "Limited", "Yes, but harder", True),
-    "newport_point": ("Yes", "Yes", "Yes, but harder", True),
+    "misquamicut":   ("Yes", "Limited", "Yes", True),
+    "napatree":      ("Likely", "Limited", "Yes", True),
+    "newport_point": ("Yes", "Yes", "Yes", True),
     "oakland_beach": ("Yes", "Yes", "Yes", False),
     "cranston":      ("No", "Yes", "Yes", False),
 }
@@ -107,16 +108,33 @@ def test_three_answers_for_recorded_spots(name):
     assert all(s.ok for s in r.sources)
 
 
-def test_depths_use_the_deepest_nearby_sample_and_follow_the_year():
+def test_depths_use_the_point_itself_and_follow_the_year():
     r = report("misquamicut")
     assert [d.depth_ft for d in r.depths] == SPOTS["misquamicut"]["depths"]
-    assert "18.6 ft" in r.will_it_flood.detail and "by 2050" in r.will_it_flood.detail
+    assert "16.9 ft" in r.will_it_flood.detail and "by 2056" in r.will_it_flood.detail
     assert "13.5 ft" in report("misquamicut", year="today").will_it_flood.detail
+    assert "7 ft of sea level rise" in report("misquamicut", year="after-2100").will_it_flood.detail
+
+
+def test_depth_falls_back_to_the_median_nearby_when_the_point_has_no_data():
+    class Gap(Recorded):
+        def __call__(self, url, params, headers, timeout):
+            if url == STORM:
+                return 200, {"samples": [{"locationId": 0, "value": "NoData"}, {"locationId": 3, "value": "9.0"},
+                                         {"locationId": 4, "value": "10.0"}, {"locationId": 5, "value": "16.0"}]}
+            return super().__call__(url, params, headers, timeout)
+    r = report("misquamicut", transport=Gap())
+    assert [d.depth_ft for d in r.depths] == [10.0] * 6     # median, not the 16 ft next to open water
+
+
+def test_years_follow_noaa_2022_high_at_newport():
+    from floodrules.sources import SCENARIOS
+    assert [(ft, key) for _, ft, key in SCENARIOS] == [(0, "today"), (2, "2056"), (3, "2068"), (5, "2087"), (7, "after-2100"), (10, "worst-case")]
 
 
 def test_flooding_that_starts_later():
     r = report("oakland_beach", year="today")
-    assert r.will_it_flood.answer == "Not today" and "around 2040" in r.will_it_flood.detail
+    assert r.will_it_flood.answer == "Not today" and "around 2056" in r.will_it_flood.detail
 
 
 def test_coastal_barrier_details_are_kept_for_audit():

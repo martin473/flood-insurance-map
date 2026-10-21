@@ -2,7 +2,7 @@
 
   Will it flood here?               URI STORMTOOLS depths, falling back to FEMA's zone where the model has no data
   Can it get flood insurance?       the coverage engine over verified insurer rules, plus the federal program
-  Can it get homeowners insurance?  risk signals insurers are known to use; always available via the state FAIR Plan
+  Can it get homeowners insurance?  private market, with the state FAIR Plan as the insurer of last resort
 
 Every answer lists its sources and when they were checked, so a saved answer can be audited later.
 """
@@ -20,10 +20,12 @@ from .schemas import Product
 from .sources import SCENARIOS, SourceError, Sources, iso
 
 ISLAND_TOWNS = {"Newport", "Middletown", "Portsmouth", "Jamestown", "New Shoreham"}
-WASHINGTON_COUNTY = {"Charlestown", "Exeter", "Hopkinton", "Narragansett", "New Shoreham", "North Kingstown", "Richmond",
-                     "South Kingstown", "Westerly"}
-NEWPORT_COUNTY = {"Jamestown", "Little Compton", "Middletown", "Newport", "Portsmouth", "Tiverton"}
-YEARS = [label for _, _, label in SCENARIOS]
+YEARS = [key for _, _, key in SCENARIOS]
+# how each scenario reads in a sentence ("... in a major storm by 2056")
+WHEN = {"today": "today", "2056": "by 2056", "2068": "by 2068", "2087": "by 2087",
+        "after-2100": "after 2100 (7 ft of sea level rise)", "worst-case": "with 10 ft of sea level rise"}
+START = {"today": "today", "2056": "around 2056", "2068": "around 2068", "2087": "around 2087",
+         "after-2100": "after 2100, once seas rise 7 ft", "worst-case": "only with 10 ft of sea level rise"}
 
 
 class Answer(BaseModel):
@@ -66,7 +68,7 @@ def _safe(fn, *args):
         return None, str(e)
 
 
-def assess(lat: float, lng: float, sources: Sources, products: list[Product], year: str = "2050") -> PropertyReport:
+def assess(lat: float, lng: float, sources: Sources, products: list[Product], year: str = "2056") -> PropertyReport:
     if year not in YEARS:
         raise ValueError(f"year must be one of {', '.join(YEARS)}")
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -97,7 +99,7 @@ def assess(lat: float, lng: float, sources: Sources, products: list[Product], ye
         lat=lat, lng=lng, year=year, checked_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         will_it_flood=flood,
         flood_insurance=_insurance_answer(decisions, sfha, cbrs, private_rules=bool(products)),
-        homeowners_insurance=_homeowners_answer(depths, fema, town),
+        homeowners_insurance=_homeowners_answer(depths, fema),
         lenders_require_flood_insurance=sfha,
         depths=[ScenarioDepth(year=label, sea_level_rise_ft=ft, depth_ft=(depths[k] if depths else None))
                 for k, (_, ft, label) in enumerate(SCENARIOS)],
@@ -110,7 +112,7 @@ def assess(lat: float, lng: float, sources: Sources, products: list[Product], ye
 
 
 def _when(i: int) -> str:
-    return "today" if i == 0 else f"by {YEARS[i]}"
+    return WHEN[YEARS[i]]
 
 
 def _flood_answer(depths: list[float] | None, fema: dict | None, i: int) -> Answer:
@@ -119,7 +121,7 @@ def _flood_answer(depths: list[float] | None, fema: dict | None, i: int) -> Answ
             return Answer(answer="Yes", level="bad", detail=f"About {depths[i]:.1f} ft of water, including storm waves, in a major storm {_when(i)}.")
         first = next((k for k, d in enumerate(depths) if d > 0), None)
         if first is not None:
-            start = "today" if first == 0 else f"around {YEARS[first]}"
+            start = START[YEARS[first]]
             return Answer(answer=f"Not {_when(i)}", level="warn", detail=f"It starts flooding in a major storm {start}.")
     if fema and fema["sfha"]:
         z = fema["zone"] or ""
@@ -130,14 +132,14 @@ def _flood_answer(depths: list[float] | None, fema: dict | None, i: int) -> Answ
                       detail=f"FEMA maps this as high flood risk (zone {z}), possibly from rivers or rain. URI's coastal model shows no storm flooding here.")
     if depths is None and fema is None:
         return Answer(answer="Couldn't check", level="unknown", detail="The flood data services didn't respond. Try again in a minute.")
-    return Answer(answer="No", level="good", detail="Not in a major storm, even by 2100.")
+    return Answer(answer="No", level="good", detail="Not in a major storm, even with 10 ft of sea level rise.")
 
 
 def _insurance_answer(decisions: list[Decision], sfha: bool | None, cbrs: dict | None, private_rules: bool) -> Answer:
     nfip = next(d for d in decisions if d.insurer == "NFIP")
     private = [d for d in decisions if d.insurer != "NFIP"]
     yes = [d for d in private if d.status == Status.AVAILABLE]
-    suffix = " Lenders require it here." if sfha else ""
+    suffix = " Most mortgage lenders require it here." if sfha else ""
     if nfip.status == Status.AVAILABLE:
         extra = f" plus {len(yes)} private insurer{'s' if len(yes) != 1 else ''}" if yes else ""
         note = "" if private_rules else " No private insurers' rules are loaded yet."
@@ -154,16 +156,15 @@ def _insurance_answer(decisions: list[Decision], sfha: bool | None, cbrs: dict |
     return Answer(answer="Couldn't check", level="unknown", detail="The coastal barrier map didn't respond, so federal eligibility is unknown." + suffix)
 
 
-def _homeowners_answer(depths: list[float] | None, fema: dict | None, town: str | None) -> Answer:
+def _homeowners_answer(depths: list[float] | None, fema: dict | None) -> Answer:
+    """No unsourced market claims here: private insurers write homes statewide, and the RI Joint
+    Reinsurance Association (the FAIR Plan) insures homes that can't get coverage in the voluntary
+    market (RIJRA testimony to the RI House, March 2026). The map adds ZIP-level non-renewal data."""
+    fallback = "If private insurers decline, the state's FAIR Plan (RI Joint Reinsurance Association) insures homes that can't get coverage elsewhere."
     floods_now = bool(depths and depths[0] > 0) or bool(fema and (fema["zone"] or "").upper().startswith("V"))
     if floods_now:
-        return Answer(answer="Yes, but harder", level="warn",
-                      detail="This spot floods in a major storm today, and insurers limit how many homes like this they cover. "
-                             "If private insurers say no, the state's FAIR Plan must offer a policy, typically at 40 to 50% higher cost.")
-    if town in WASHINGTON_COUNTY or town in NEWPORT_COUNTY:
-        county = "Newport" if town in NEWPORT_COUNTY else "Washington"
         return Answer(answer="Yes", level="good",
-                      detail=f"Private insurers write homes here, but {county} County has some of the highest non-renewal rates in the country. "
-                             "Get quotes early in your purchase.")
+                      detail=f"Private insurers write homes across Rhode Island. {fallback} Homeowners insurance doesn't cover flooding, "
+                             "and this spot floods in a major storm today, so it needs a separate flood policy.")
     return Answer(answer="Yes", level="good",
-                  detail="Widely available from private insurers. Homeowners insurance doesn't cover flooding; that's a separate policy.")
+                  detail=f"Private insurers write homes across Rhode Island. {fallback} Homeowners insurance doesn't cover flooding; that's a separate policy.")

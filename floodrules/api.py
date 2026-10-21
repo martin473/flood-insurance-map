@@ -119,7 +119,7 @@ def metrics() -> dict:
 
 @app.get("/property", response_model=PropertyReport)
 def property_report(request: Request, lat: float = Query(..., ge=-90, le=90), lng: float = Query(..., ge=-180, le=180),
-                    year: str = Query("2050", description=f"one of {', '.join(YEARS)}")) -> PropertyReport:
+                    year: str = Query("2056", description=f"one of {', '.join(YEARS)}")) -> PropertyReport:
     if not (RI_BOUNDS[0] <= lat <= RI_BOUNDS[1] and RI_BOUNDS[2] <= lng <= RI_BOUNDS[3]):
         raise HTTPException(422, "This service covers Rhode Island only.")
     if year not in YEARS:

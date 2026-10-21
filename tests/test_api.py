@@ -65,7 +65,7 @@ def live(client, monkeypatch):
 
 
 def test_property_endpoint(live):
-    r = live.get("/property", params={"lat": 41.3260, "lng": -71.7920, "year": "2050"})
+    r = live.get("/property", params={"lat": 41.3260, "lng": -71.7920, "year": "2056"})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["will_it_flood"]["answer"] == "Yes" and body["flood_insurance"]["answer"] == "Limited"

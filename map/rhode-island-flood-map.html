@@ -128,9 +128,9 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
     </section>
 
     <section>
-      <div class="yearhead"><span class="year" id="year">2050</span><span class="rise" id="rise">seas +3 ft</span></div>
-      <input type="range" id="yr" min="0" max="5" step="1" value="2" aria-label="Year" aria-describedby="rise">
-      <div class="ticks"><span>Today</span><span>2040</span><span>2050</span><span>2070</span><span>2085</span><span>2100</span></div>
+      <div class="yearhead"><span class="year" id="year">2056</span><span class="rise" id="rise">seas +2 ft</span></div>
+      <input type="range" id="yr" min="0" max="5" step="1" value="1" aria-label="Year" aria-describedby="rise">
+      <div class="ticks"><span>Today</span><span>2056</span><span>2068</span><span>2087</span><span>2100+</span><span>+10 ft</span></div>
     </section>
 
     <section id="report" aria-live="polite">
@@ -146,7 +146,7 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
         <span><b><span class="xhatch" aria-hidden="true"></span>Hard to insure</b><small>Most insurers won't cover homes here. Everywhere else in Rhode Island, flood insurance is available.</small></span></label>
     </section>
 
-    <p class="fine">Screening tool, not an official flood determination. Flooding: University of Rhode Island <a href="https://stormtools-mainpage-crc-uri.hub.arcgis.com/" target="_blank" rel="noopener">STORMTOOLS</a> 100-year storm with sea level rise, coastal areas only. Insurance zone: FEMA Special Flood Hazard Area from the <a href="https://www.fema.gov/flood-maps/national-flood-hazard-layer" target="_blank" rel="noopener">National Flood Hazard Layer</a>. Years follow the NOAA high sea level curve for Newport used by the RI Coastal Resources Management Council. Insurer availability is modeled from published eligibility rules (Neptune and Hiscox FloodPlus: RT Specialty comparison, 2023; Hiscox FloodPlus brochure, 2024; MSI Residential Flood underwriting guide, 2026; NFIP: Coastal Barrier Resources Act, <a href="https://www.fws.gov/cbra/maps-and-data" target="_blank" rel="noopener">USFWS CBRS map</a>). Homeowners insurance: RI Joint Reinsurance Association (FAIR Plan) testimony, March 2026; What's Up Newp, March 2025. What neighbors paid: <a href="https://www.fema.gov/openfema-data-page/nfip-redacted-policies-v3" target="_blank" rel="noopener">FEMA NFIP policy records</a> (single-family homes, last 12 months of data) and U.S. Treasury Federal Insurance Office ZIP-level homeowners premiums, 2018–2022. Census tract and ZIP: Census Bureau TIGERweb. NFIP sellers: <a href="https://www.floodsmart.gov/get-insured/flood-insurance-provider" target="_blank" rel="noopener">FloodSmart provider list</a>, October 2026. Insurers make the final decision on each home and may add rules not shown here. Basemap: Esri. Address search: OpenStreetMap.</p>
+    <p class="fine">Screening tool, not an official flood determination. Flooding: University of Rhode Island <a href="https://stormtools-mainpage-crc-uri.hub.arcgis.com/" target="_blank" rel="noopener">STORMTOOLS</a> 100-year storm with sea level rise, coastal areas only. Insurance zone: FEMA Special Flood Hazard Area from the <a href="https://www.fema.gov/flood-maps/national-flood-hazard-layer" target="_blank" rel="noopener">National Flood Hazard Layer</a>. Years: when each sea level is reached at Newport under NOAA's 2022 High scenario, the projection the <a href="https://www.crmc.ri.gov/" target="_blank" rel="noopener">RI Coastal Resources Management Council</a> requires for coastal permits; 7 and 10 ft aren't reached by 2100 under it. Depth is the model's value at the point, or the median of nearby cells where the point has no data. Insurer availability is modeled from each program's published rules: Hiscox FloodPlus (Hiscox brochure and appetite guide, 2024), MSI Residential Flood (MSI quick reference guide, 2025), Neptune Flood (Neptune agent guide, 2023; RT Specialty comparison, 2023); federal program: Coastal Barrier Resources Act, <a href="https://www.fws.gov/cbra/maps-and-data" target="_blank" rel="noopener">USFWS CBRS map</a>. Homeowners insurance: RI Joint Reinsurance Association testimony to the RI House, March 2026. What neighbors paid: <a href="https://www.fema.gov/openfema-data-page/nfip-redacted-policies-v3" target="_blank" rel="noopener">FEMA NFIP policy records</a> (single-family homes, last 12 months of data) and U.S. Treasury Federal Insurance Office ZIP-level homeowners premiums, 2018–2022. Census tract and ZIP: Census Bureau TIGERweb. NFIP sellers: <a href="https://www.floodsmart.gov/get-insured/flood-insurance-provider" target="_blank" rel="noopener">FloodSmart provider list</a>, October 2026. Insurers make the final decision on each home and may add rules not shown here. Basemap: Esri. Address search: OpenStreetMap.</p>
   </aside>
   <div id="map" role="application" aria-label="Rhode Island flood map"></div>
 </div>
@@ -155,18 +155,22 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
 (function(){
   var FEMA = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer";
   var STORM = "https://maps.edc.uri.edu/stormtools/rest/services/Stormtools2020/Mosaic_100yr_SDE_TOTALDEPTH_All/ImageServer";
-  // STORMTOOLS image IDs 1..6 = 0, 2, 3, 5, 7, 10 ft of sea level rise
+  // STORMTOOLS image IDs 1..6 = 0, 2, 3, 5, 7, 10 ft of sea level rise (from the service's description).
+  // Years: when each rise is reached at the Newport tide gauge under NOAA's 2022 High scenario, which the
+  // RI Coastal Resources Management Council requires in its coastal hazard worksheets
+  // (2050 1.60 ft, 2060 2.29, 2070 3.17, 2080 4.19, 2090 5.35, 2100 6.47). 7 and 10 ft aren't reached by 2100.
+  // key = the API's year parameter; when/start = how it reads in a sentence; tick = short label.
   var SCEN = [
-    {id:1, ft:0,  yr:"Today"},
-    {id:2, ft:2,  yr:"2040"},
-    {id:3, ft:3,  yr:"2050"},
-    {id:4, ft:5,  yr:"2070"},
-    {id:5, ft:7,  yr:"2085"},
-    {id:6, ft:10, yr:"2100"}
+    {id:1, ft:0,  yr:"Today",      key:"today",      tick:"Today", when:"today",                          start:"today"},
+    {id:2, ft:2,  yr:"2056",       key:"2056",       tick:"2056",  when:"by 2056",                        start:"around 2056"},
+    {id:3, ft:3,  yr:"2068",       key:"2068",       tick:"2068",  when:"by 2068",                        start:"around 2068"},
+    {id:4, ft:5,  yr:"2087",       key:"2087",       tick:"2087",  when:"by 2087",                        start:"around 2087"},
+    {id:5, ft:7,  yr:"After 2100", key:"after-2100", tick:"2100+", when:"after 2100 (7 ft of sea level rise)", start:"after 2100, once seas rise 7 ft"},
+    {id:6, ft:10, yr:"Worst case", key:"worst-case", tick:"+10 ft",when:"with 10 ft of sea level rise",   start:"only with 10 ft of sea level rise"}
   ];
-  var cur = 2;
+  var cur = 1;   // 2056: about the end of a 30-year mortgage taken out now
   // NFIP authorization end date. Update when Congress extends it (fema.gov/flood-insurance/rules-legislation/congressional-reauthorization)
-  var NFIP_AUTH_UNTIL="2026-12-12", NFIP_AUTH_LABEL="December 12, 2026";
+  var NFIP_AUTH_UNTIL="2026-12-11", NFIP_AUTH_LABEL="December 11, 2026";   // H.R. 6500, signed Sept. 2, 2026
 
   var map = L.map("map").setView([41.3260,-71.7920],15); // Misquamicut, Westerly
   map.setMaxBounds([[40.9,-72.2],[42.3,-70.9]]);
@@ -276,7 +280,12 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
     if(!C||!C.homeowners||!area||!area.zip) return "";
     var h=C.homeowners.zip[area.zip];
     if(!h) return "";
-    return '<p class="paid"><b>What neighbors paid:</b> <b>'+usd(h.avg)+'</b> a year on average for homeowners insurance in ZIP '+esc(area.zip)+'.'+
+    var nat=C.homeowners.national_nonrenewal_pct, nr="";
+    if(h.nonrenewal_pct!=null && nat){
+      var cmp=h.nonrenewal_pct>=nat.p90?"among the highest 10% of ZIP codes nationally":h.nonrenewal_pct>nat.median?"above the national median of "+nat.median+"%":"at or below the national median of "+nat.median+"%";
+      nr=' Insurers declined to renew <b>'+h.nonrenewal_pct+'%</b> of policies here, '+cmp+'.';
+    }
+    return '<p class="paid"><b>What neighbors paid:</b> <b>'+usd(h.avg)+'</b> a year on average for homeowners insurance in ZIP '+esc(area.zip)+'.'+nr+
       '<span class="fine">'+h.year+', the latest year the Treasury published. Doesn\'t include FAIR Plan policies. <a href="'+esc(C.homeowners.url)+'" target="_blank" rel="noopener">Treasury data</a></span></p>';
   }
 
@@ -319,14 +328,14 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
         NFIP_RI.map(function(c){return '<li>'+c[0]+' <span class="ph">'+c[1]+'</span></li>';}).join("")+'</ul></details>',
       why: unknownCB?"Couldn't check the coastal barrier map." : inCB ? "Coastal barrier area ("+cb.type+(cb.unit?", unit "+cb.unit:"")+"). Only homes built before "+(cb.fiDate||"the area's designation date")+" can get federal flood insurance." : "Available to every Rhode Island property."});
     out.push({n:"Neptune Flood",
-      st: unknownCB?"unk":(inCB?"no":"yes"),
+      st: unknownCB?"unk":(inCB?"maybe":"yes"),
       how:'<a href="https://neptuneflood.com/" target="_blank" rel="noopener">Get a quote online at neptuneflood.com</a>',
-      why: inCB?"Doesn't cover coastal barrier (CBRA) areas.":"Available. Not offered for homes over water or manufactured homes."});
+      why: inCB?"Neptune's agent guide (2023) lists coastal barrier (CBRA) properties as ineligible, but its website says it covers homes in these areas. Ask for a quote.":"Available. Not offered for homes over water, manufactured homes, or homes with more than one past flood loss."});
     var fw=fe&&fe.floodway, sf=fe&&fe.sfha;
     out.push({n:"Hiscox FloodPlus",
       st: (fe===undefined||unknownCB)?"unk":(inCB||fw?"no":(sf?"maybe":"yes")),
       how:"Through an independent agent or broker (sold as surplus lines).",
-      why: inCB?"Doesn't cover coastal barrier (CBRA) areas.":fw?"Doesn't cover homes in a floodway.":sf?"In the high-risk zone, only if the home sits above the flood elevation.":"Available. Not offered for condos or homes with more than one past flood claim."});
+      why: inCB?"Doesn't cover coastal barrier (CBRA) areas.":fw?"Doesn't cover homes in a floodway.":sf?"In the high-risk zone, only if the home sits above the flood elevation.":"Available. Not offered for condos, manufactured homes, or homes with any past flood loss."});
     out.push({n:"MSI Residential Flood",
       st: unknownCB||town===undefined?"unk":(inCB||onIsland?"no":"yes"),
       how:'Through MSI\'s partner agents. Email <span class="ph">Contactflood@msimga.com</span> to be connected.',
@@ -334,8 +343,9 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
     out.push({n:"ShoreOne (home + flood)",st:"unk",why:"Rules not published yet. We've asked.",how:"Through a Rhode Island independent agent."});
     return out;
   }
-  // The STORMTOOLS raster has scattered no-data cells (beaches, dunes), so sample a ~20 m neighborhood
-  // around the point in one getSamples call and take the deepest water found.
+  // Depth at the point itself. The STORMTOOLS raster has scattered no-data cells (beaches, dunes), so the
+  // ~20 m neighborhood is sampled in the same call and its median is used only when the point has no value
+  // (the median, not the deepest, so a lot next to open water isn't given the water's depth).
   // The service answers with an error when every sample is no-data; that means dry (0), not a failure.
   function depth(lat,lng,id){
     var dl=0.00018, dg=0.00024, offs=[[0,0],[dl,0],[-dl,0],[0,dg],[0,-dg],[dl,dg],[-dl,-dg],[dl,-dg],[-dl,dg]];
@@ -344,8 +354,13 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
       "&geometry="+encodeURIComponent(JSON.stringify(mp))+"&mosaicRule="+encodeURIComponent(JSON.stringify(lockRule(id)));
     return jsonp(u).then(function(d){
       if(d && d.error) return 0;
-      var v=((d&&d.samples)||[]).map(function(x){return parseFloat(x.value);}).filter(function(x){return isFinite(x)&&x>0;});
-      return v.length?Math.max.apply(null,v):0;
+      var center=null, around=[];
+      ((d&&d.samples)||[]).forEach(function(x){ var v=parseFloat(x.value); if(!(isFinite(v)&&v>0)) return;
+        if(x.locationId===0) center=v; else around.push(v); });
+      if(center!==null) return center;
+      if(!around.length) return 0;
+      around.sort(function(a,b){return a-b;}); var m=around.length>>1;
+      return around.length%2?around[m]:(around[m-1]+around[m])/2;
     }).catch(function(){return null;});
   }
 
@@ -357,18 +372,18 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
     var max=Math.max.apply(null,d.map(function(v){return v||0;}));
     var c=d[cur], first=-1;
     for(var i=0;i<d.length;i++){ if(d[i]>0){first=i;break;} }
-    var when=s.ft?"by "+s.yr:"today";
+    var when=s.when;
     var sfha=last.fema?last.fema.sfha:undefined;
 
     // Q1: will it flood here?
     var fA,fS,fC;
     if(failed && sfha===undefined){ fA="Couldn't check"; fS="The flood map services didn't respond. Try again in a minute."; fC="unk"; }
     else if(!failed && c>0){ fA="Yes"; fS="About "+c.toFixed(1)+" ft of water, including storm waves, in a major storm "+when+"."; fC="bad"; }
-    else if(!failed && max>0){ fA="Not "+when; fS="It starts flooding in a major storm around "+(first===0?"today":SCEN[first].yr)+"."; fC="warn"; }
+    else if(!failed && max>0){ fA="Not "+when; fS="It starts flooding in a major storm "+SCEN[first].start+"."; fC="warn"; }
     else if(sfha){ var z=last.fema.zone||"";
       if(/^V/.test(z)){ fA="Likely"; fS="FEMA maps this as coastal high risk with storm waves (zone "+z+"). URI's storm model has no data at this spot, so depth and timing aren't available."; fC="bad"; }
       else { fA="Likely"; fS="FEMA maps this as high flood risk (zone "+z+"), possibly from rivers or rain. URI's coastal model shows no storm flooding here."; fC="warn"; } }
-    else { fA="No"; fS="Not in a major storm, even by 2100."; fC="good"; }
+    else { fA="No"; fS="Not in a major storm, even with 10 ft of sea level rise."; fC="good"; }
 
     // Q2: can it be insured?
     var list=insurers(last.fema,last.cbrs,last.town);
@@ -381,21 +396,17 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
     else if(yes.length){ iA="Yes, privately"; iS=yes.length+" private insurer"+(yes.length>1?"s":"")+" offer coverage here."; iC="good"; }
     else if(maybe.length){ iA="Limited"; iS=nfip.st==="maybe"?"Federal insurance only if the home was built before "+(last.cbrs&&last.cbrs.fiDate||"this area was protected")+". Most private insurers won't cover it.":"Only if the home sits above the flood elevation."; iC="warn"; }
     else { iA="Hard to insure"; iS="The insurers we checked don't cover this spot."; iC="bad"; }
-    if(sfha) iS+=" Lenders require it here.";
+    if(sfha) iS+=" Most mortgage lenders require it here.";
     var nfipWarn = nfipNote(nfip.st);
 
-    // Q3: homeowners insurance. Always available via the state FAIR Plan (RIJRA); the question is private vs FAIR Plan.
-    var SHORE_COUNTIES=["Charlestown","Exeter","Hopkinton","Narragansett","New Shoreham","North Kingstown","Richmond","South Kingstown","Westerly",
-                        "Jamestown","Little Compton","Middletown","Newport","Portsmouth","Tiverton"];
-    var coastalNow=(!failed && d[0]>0) || /^V/.test((last.fema&&last.fema.zone)||"");
-    var hiNonrenew=last.town && SHORE_COUNTIES.indexOf(last.town)>=0;
-    var hA,hS,hC;
-    if(coastalNow){ hA="Yes, but harder"; hC="warn";
-      hS="This spot floods in a major storm today, and insurers limit how many homes like this they cover. If private insurers say no, the state's FAIR Plan must offer a policy, typically at 40 to 50% higher cost."; }
-    else if(hiNonrenew){ hA="Yes"; hC="good";
-      hS="Private insurers write homes here, but "+(["Jamestown","Little Compton","Middletown","Newport","Portsmouth","Tiverton"].indexOf(last.town)>=0?"Newport":"Washington")+" County has some of the highest non-renewal rates in the country. Get quotes early in your purchase."; }
-    else if(last.town===undefined && failed){ hA="Couldn't check"; hC="unk"; hS="The map services didn't respond. Try again in a minute."; }
-    else { hA="Yes"; hC="good"; hS="Widely available from private insurers. Homeowners insurance doesn't cover flooding, so that's a separate policy."; }
+    // Q3: homeowners insurance. Private insurers write homes statewide; the RI Joint Reinsurance Association
+    // (FAIR Plan) insures homes that can't get coverage in the voluntary market (RIJRA testimony, March 2026).
+    // The ZIP's non-renewal rate (Treasury data) is shown under the answer by paidHome().
+    var floodsNow=(!failed && d[0]>0) || /^V/.test((last.fema&&last.fema.zone)||"");
+    var fallback="If private insurers decline, the state's FAIR Plan (RI Joint Reinsurance Association) insures homes that can't get coverage elsewhere.";
+    var hA="Yes", hC="good", hS="Private insurers write homes across Rhode Island. "+fallback+
+      (floodsNow?" Homeowners insurance doesn't cover flooding, and this spot floods in a major storm today, so it needs a separate flood policy."
+                :" Homeowners insurance doesn't cover flooding; that's a separate policy.");
 
     render(last.label, [fA,fS,fC], [iA,iS,iC,paidFlood(last.costs,last.area,last.town,sfha)], [hA,hS,hC,paidHome(last.costs,last.area)],
       nfipWarn, chartHtml(d), whoHtml(list), "");
@@ -416,7 +427,7 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
     var bars=d.map(function(v,i){var h=Math.round((v||0)/max*64);
       return '<div class="bar"><span>'+(v===null?"–":(v?v.toFixed(1):"0"))+'</span><i style="height:'+h+'px;'+(i===cur?'':'opacity:.35')+'"></i></div>';}).join("");
     return '<details class="more"><summary>Flood depth year by year</summary><div class="depths" style="margin-top:8px">'+bars+'</div><div class="yrs">'+
-      SCEN.map(function(x){return "<span>"+x.yr+"</span>";}).join("")+'</div></details>';
+      SCEN.map(function(x){return "<span>"+x.tick+"</span>";}).join("")+'</div></details>';
   }
 
   function whoHtml(list){
@@ -458,7 +469,7 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
   }
 
   function apiLookup(lat,lng,label){
-    var year=cur===0?"today":SCEN[cur].yr;
+    var year=SCEN[cur].key;
     var rep=fetch(API+"/property?lat="+lat.toFixed(5)+"&lng="+lng.toFixed(5)+"&year="+year)
       .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
     return Promise.all([rep,areaInfo(lat,lng),costsReady])
