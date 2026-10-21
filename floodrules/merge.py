@@ -25,7 +25,12 @@ def _same_insurer(a: Product, b: Product) -> bool:
     ia, ib = _norm(a.insurer), _norm(b.insurer)
     if not ia or not ib:
         return True
-    return ia in ib or ib in ia or bool(set(ia.split()) & set(ib.split()))
+    if ia in ib or ib in ia or bool(set(ia.split()) & set(ib.split())):
+        return True
+    # a broker sheet may put the brand in the insurer field ("FloodPlus" / "FloodPlus") where the
+    # insurer's own brochure says "Hiscox" / "Hiscox FloodPlus"
+    fa, fb = _norm(f"{a.insurer} {a.program}"), _norm(f"{b.insurer} {b.program}")
+    return (len(ia) >= 4 and ia in fb) or (len(ib) >= 4 and ib in fa)
 
 
 def same_product(a: Product, b: Product) -> bool:

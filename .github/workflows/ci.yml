@@ -55,6 +55,7 @@ jobs:
       - name: Check the map and API it serves
         run: |
           echo "check: /api/health"; curl -fsS localhost:8080/api/health | grep '"ok":true'
+          echo "check: insurer rules loaded"; curl -fsS localhost:8080/api/health | grep -E '"programs_loaded": ?[1-9]'
           echo "check: map at /"; curl -fsS localhost:8080/ | grep -q '<title>Rhode Island Flood Outlook</title>'
           echo "check: map points at /api"; curl -fsS localhost:8080/ | grep -q 'name="flood-api" content="/api"'
           echo "check: /api/metrics"; curl -fsS localhost:8080/api/metrics | grep -q '"fema_nfhl"'

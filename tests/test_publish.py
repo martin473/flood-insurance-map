@@ -86,3 +86,13 @@ def test_cli_publish_rules_fails_when_nothing_passes(fake_api, guide_pdf, tmp_pa
     monkeypatch.setattr(cli, "make_extractor", lambda model: ClaudeExtractor(Claude(model=model, transport=fake_api)))
     assert cli.main(["--sources", str(sources), "publish-rules", "--rules-dir", str(tmp_path / "rules"), "--attempts", "2"]) == 1
     assert not (tmp_path / "rules").exists()
+
+
+def test_brand_in_insurer_field_still_merges():
+    from floodrules.merge import same_product
+    base = {"availability": {"mode": "all_except", "states": ["AK", "HI"]}}
+    a = Product.model_validate({**base, "insurer": "FloodPlus", "program": "FloodPlus"})
+    b = Product.model_validate({**base, "insurer": "Hiscox", "program": "Hiscox FloodPlus Residential"})
+    n = Product.model_validate({**base, "insurer": "Neptune Flood", "program": "Neptune Flood"})
+    assert same_product(a, b) and same_product(b, a)
+    assert not same_product(a, n) and not same_product(b, n)
