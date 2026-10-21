@@ -1,0 +1,14 @@
+# Insurer documents are copyrighted; keep them local, never commit them
+data/docs/*.pdf
+# Raw model responses can quote documents at length
+evals/cache/
+evals/runs/*.json
+.env
+__pycache__/
+*.pyc
+.coverage
+htmlcov/
+.pytest_cache/
+evals/runs/latest.md
+.mypy_cache/
+.ruff_cache/

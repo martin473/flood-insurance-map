@@ -1,0 +1,21 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]" ruff mypy
+      - run: ruff check floodrules tests
+      - run: mypy --ignore-missing-imports floodrules
+      - run: pytest --cov=floodrules --cov-report=term-missing --cov-fail-under=85

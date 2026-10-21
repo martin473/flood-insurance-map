@@ -1,0 +1,20 @@
+{
+ "document": "msi_flood_2026",
+ "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
+ "notes": "The $100K Coverall endorsement covers several items together, so it isn't labeled as a single limit.",
+ "products": [
+  {
+   "match": ["msi"],
+   "product": {
+    "insurer": "MSI", "program": "Residential Flood Marketplace",
+    "availability": {"mode": "all_except", "states": ["AK", "HI", "KY", "LA"]},
+    "elevation_certificate_required": false,
+    "waiting_period_days": 5,
+    "location_exclusions": [{"kind": "over_water"}, {"kind": "cbrs"}, {"kind": "island"}, {"kind": "barrier_island"}],
+    "property_exclusions": [{"kind": "subgrade_contents", "detail": "more than 50% of contents on a subgrade floor"},
+                            {"kind": "severe_repetitive_loss"}],
+    "limits": [{"kind": "total_insured_value", "amount_usd": 2500000}, {"kind": "increased_cost_of_compliance", "amount_usd": 30000}]
+   }
+  }
+ ]
+}

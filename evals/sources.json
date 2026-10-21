@@ -1,0 +1,25 @@
+{
+ "documents": [
+  {
+   "id": "rt_specialty_2023",
+   "title": "RT Specialty: Residential Primary Flood Comparison",
+   "url": "https://rtspecialty.com/wp-content/uploads/2023/04/RT_PL_ResidentialPrimaryFloodComparison.pdf",
+   "file": "data/docs/rt_specialty_2023.pdf",
+   "labels": "evals/labels/rt_specialty_2023.json"
+  },
+  {
+   "id": "hiscox_floodplus_2024",
+   "title": "Hiscox London Market: FloodPlus brochure",
+   "url": "https://www.hiscoxlondonmarket.com/sites/londonmarket/files/2024-10/FloodPlus_brochure.pdf",
+   "file": "data/docs/hiscox_floodplus_2024.pdf",
+   "labels": "evals/labels/hiscox_floodplus_2024.json"
+  },
+  {
+   "id": "msi_flood_2026",
+   "title": "MSI Residential Flood Marketplace: quick reference guide",
+   "url": "https://resources.msimga.com/hubfs/MSI%20Flood%20QRG%202025.pdf?hsLang=en",
+   "file": "data/docs/msi_flood_2026.pdf",
+   "labels": "evals/labels/msi_flood_2026.json"
+  }
+ ]
+}
