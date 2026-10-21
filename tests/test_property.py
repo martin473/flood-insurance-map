@@ -1,0 +1,178 @@
+"""Property lookups against recorded responses.
+
+The values below are what FEMA NFHL, USFWS CBRS, URI STORMTOOLS and Nominatim returned
+for five Rhode Island spots on 2026-10-21. The fake transport serves them in the same
+shapes the real services use, so these tests pin the full lookup-to-answer path offline.
+"""
+
+import json
+from datetime import date, datetime, timezone
+from pathlib import Path
+
+import pytest
+import requests
+
+from floodrules.engine import Status
+from floodrules.evaluation import load_labels
+from floodrules.property import assess
+from floodrules.sources import CBRS, FEMA, NOMINATIM, STORM, Sources
+
+LABELS = Path(__file__).resolve().parent.parent / "evals" / "labels"
+
+
+def ms(d):
+    return int(datetime(d.year, d.month, d.day, tzinfo=timezone.utc).timestamp() * 1000)
+
+
+SPOTS = {
+    "misquamicut": dict(lat=41.3260, lng=-71.7920, fema=("AE", "T", None), cbrs=("RI-13P", "Otherwise Protected Area", date(2025, 11, 25)),
+                        depths=[13.5, 16.9, 18.6, 22.1, 25.5, 30.7], town="Westerly"),
+    "napatree": dict(lat=41.3113, lng=-71.8826, fema=("VE", "T", None), cbrs=("D08", "System Unit", date(1983, 10, 1)),
+                     depths=[0, 0, 0, 0, 0, 0], town="Westerly"),
+    "newport_point": dict(lat=41.4925, lng=-71.3215, fema=("VE", "T", None), cbrs=None,
+                          depths=[12.4, 14.8, 15.9, 18.0, 20.1, 23.2], town="Newport"),
+    "oakland_beach": dict(lat=41.6980, lng=-71.4040, fema=("X", "F", None), cbrs=None,
+                          depths=[0, 2.7, 3.8, 5.8, 8.0, 12.0], town="Warwick"),
+    "cranston": dict(lat=41.7798, lng=-71.4950, fema=("X", "F", None), cbrs=None, depths=[0, 0, 0, 0, 0, 0], town="Cranston"),
+}
+
+
+class Recorded:
+    """Serves the recorded responses. `fail` makes one source return HTTP 503."""
+
+    def __init__(self, fail=None):
+        self.calls = []
+        self.fail = fail
+
+    def spot(self, lng, lat):
+        return next(s for s in SPOTS.values() if abs(s["lat"] - lat) < 0.01 and abs(s["lng"] - lng) < 0.01)
+
+    def __call__(self, url, params, headers, timeout):
+        self.calls.append(url)
+        assert "flood-insurance-map" in headers["User-Agent"]
+        if self.fail and self.fail in url:
+            return 503, {"error": {"message": "Service Unavailable"}}
+        if url in (FEMA, CBRS):
+            lng, lat = map(float, params["geometry"].split(","))
+            s = self.spot(lng, lat)
+            if url == FEMA:
+                zone, sfha, sub = s["fema"]
+                return 200, {"features": [{"attributes": {"FLD_ZONE": zone, "SFHA_TF": sfha, "ZONE_SUBTY": sub, "STATIC_BFE": -9999}}]}
+            if not s["cbrs"]:
+                return 200, {"features": []}
+            unit, kind, fi = s["cbrs"]
+            return 200, {"features": [{"attributes": {"Unit": unit, "CBRS_Type": kind, "FI_Date": ms(fi)}}]}
+        if url == STORM:
+            pts = json.loads(params["geometry"])["points"]
+            s = self.spot(*pts[0])
+            rid = json.loads(params["mosaicRule"])["lockRasterIds"][0]
+            depth = s["depths"][rid - 1]
+            if not depth:
+                return 200, {"error": {"code": 400, "message": "Invalid or missing input parameters."}}
+            # neighbors vary; the deepest one should win
+            return 200, {"samples": [{"value": str(depth - 0.4)}, {"value": str(depth)}, {"value": "NoData"}]}
+        if url == NOMINATIM:
+            s = self.spot(params["lon"], params["lat"])
+            return 200, {"address": {"town" if s["town"] != "Newport" else "city": s["town"], "state": "Rhode Island"}}
+        raise AssertionError(url)
+
+
+def rules():
+    neptune = load_labels(LABELS / "rt_specialty_2023.json")[1].product
+    hiscox_rt = load_labels(LABELS / "rt_specialty_2023.json")[0].product
+    hiscox = load_labels(LABELS / "hiscox_floodplus_2024.json")[0].product.model_copy(update={"location_exclusions": hiscox_rt.location_exclusions})
+    msi = load_labels(LABELS / "msi_flood_2026.json")[0].product
+    return [neptune, hiscox, msi]
+
+
+def report(name, products=None, transport=None, year="2050"):
+    s = SPOTS[name]
+    return assess(s["lat"], s["lng"], Sources(transport or Recorded(), sleep=lambda x: None), products or [], year=year)
+
+
+EXPECTED = {
+    "misquamicut":   ("Yes", "Limited", "Yes, but harder", True),
+    "napatree":      ("Likely", "Limited", "Yes, but harder", True),
+    "newport_point": ("Yes", "Yes", "Yes, but harder", True),
+    "oakland_beach": ("Yes", "Yes", "Yes", False),
+    "cranston":      ("No", "Yes", "Yes", False),
+}
+
+
+@pytest.mark.parametrize("name", SPOTS)
+def test_three_answers_for_recorded_spots(name):
+    r = report(name)
+    assert (r.will_it_flood.answer, r.flood_insurance.answer, r.homeowners_insurance.answer,
+            r.lenders_require_flood_insurance) == EXPECTED[name]
+    assert all(s.ok for s in r.sources)
+
+
+def test_depths_use_the_deepest_nearby_sample_and_follow_the_year():
+    r = report("misquamicut")
+    assert [d.depth_ft for d in r.depths] == SPOTS["misquamicut"]["depths"]
+    assert "18.6 ft" in r.will_it_flood.detail and "by 2050" in r.will_it_flood.detail
+    assert "13.5 ft" in report("misquamicut", year="today").will_it_flood.detail
+
+
+def test_flooding_that_starts_later():
+    r = report("oakland_beach", year="today")
+    assert r.will_it_flood.answer == "Not today" and "around 2040" in r.will_it_flood.detail
+
+
+def test_coastal_barrier_details_are_kept_for_audit():
+    r = report("napatree")
+    assert r.facts["cbrs_unit"] == "D08" and r.facts["cbrs_flood_insurance_date"] == "1983-10-01"
+    assert "1983-10-01" in r.flood_insurance.detail
+    assert r.checked_at.endswith("+00:00")
+
+
+def test_insurer_decisions_with_rules_loaded():
+    r = report("newport_point", products=rules())
+    got = {d.insurer: d.status for d in r.insurers}
+    assert got == {"NFIP": Status.AVAILABLE, "Neptune Flood": Status.AVAILABLE, "Hiscox": Status.MAYBE, "MSI": Status.NOT_OFFERED}
+    assert "plus 1 private insurer" in r.flood_insurance.detail
+    assert r.facts["on_island"] is True
+
+
+def test_one_failing_source_degrades_instead_of_failing():
+    t = Recorded(fail="hazards.fema.gov")
+    r = report("cranston", transport=t)
+    status = {s.name: s.ok for s in r.sources}
+    assert status == {"fema_nfhl": False, "usfws_cbrs": True, "uri_stormtools": True, "nominatim": True}
+    assert r.lenders_require_flood_insurance is None
+    assert r.will_it_flood.answer == "No"           # storm data still answers
+    assert t.calls.count(FEMA) == 3                 # first try + 2 retries
+
+
+def test_everything_down_says_so():
+    class Down:
+        def __call__(self, url, params, headers, timeout):
+            raise requests.ConnectionError("down")
+    r = report("cranston", transport=Down())
+    assert r.will_it_flood.answer == "Couldn't check" and r.flood_insurance.answer == "Couldn't check"
+    assert not any(s.ok for s in r.sources)
+
+
+def test_cache_and_metrics():
+    t = Recorded()
+    src = Sources(t, sleep=lambda x: None)
+    s = SPOTS["cranston"]
+    assess(s["lat"], s["lng"], src, [])
+    first = len(t.calls)
+    assess(s["lat"], s["lng"], src, [])
+    assert len(t.calls) == first                     # second lookup served from cache
+    m = src.fema.stats.as_dict()
+    assert m["calls"] == 2 and m["cache_hits"] == 1 and m["errors"] == 0 and m["avg_ms"] is not None
+
+
+def test_metrics_count_errors_and_retries():
+    src = Sources(Recorded(fail="gis1.wim.usgs.gov"), sleep=lambda x: None)
+    s = SPOTS["cranston"]
+    assess(s["lat"], s["lng"], src, [])
+    m = src.cbrs.stats.as_dict()
+    assert m["errors"] == 1 and m["retries"] == 2 and m["last_error"] == "HTTP 503" and m["error_rate"] == 1.0
+
+
+def test_unknown_year_is_rejected():
+    with pytest.raises(ValueError, match="year must be one of"):
+        report("cranston", year="2060")
