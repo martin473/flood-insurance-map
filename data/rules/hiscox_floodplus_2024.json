@@ -1,0 +1,90 @@
+{
+ "source": {
+  "document": "hiscox_floodplus_2024.pdf",
+  "url": "https://www.hiscoxlondonmarket.com/sites/londonmarket/files/2024-10/FloodPlus_brochure.pdf",
+  "published": "2024-10"
+ },
+ "extracted": {
+  "at": "2026-10-21T23:35:10+00:00",
+  "model": "ollama:gpt-oss:120b",
+  "prompt_version": "2026-10-21.4"
+ },
+ "verification": {
+  "kept": 5,
+  "rejected": 0,
+  "page_corrected": 0
+ },
+ "products": [
+  {
+   "insurer": "Hiscox",
+   "program": "Hiscox FloodPlus Residential",
+   "availability": {
+    "mode": "all_except",
+    "states": [
+     "AK",
+     "HI"
+    ],
+    "evidence": {
+     "quote": "All US states other than Alaska or Hawaii.",
+     "page": 4
+    }
+   },
+   "surplus_lines": true,
+   "elevation_certificate_required": false,
+   "waiting_period_days": 7,
+   "location_exclusions": [],
+   "property_exclusions": [],
+   "zone_conditions": [
+    {
+     "zones": [
+      "B",
+      "C",
+      "X"
+     ],
+     "rule": "eligible_if_not_surge_exposed",
+     "evidence": {
+      "quote": "Inland or non-surge exposed B, C and X zones.",
+      "page": 4
+     }
+    },
+    {
+     "zones": [
+      "A",
+      "V"
+     ],
+     "rule": "eligible_if_elevated_above_bfe",
+     "evidence": {
+      "quote": "Positively elevated (relative to BFE) A and V zones.",
+      "page": 4
+     }
+    }
+   ],
+   "limits": [
+    {
+     "kind": "dwelling",
+     "amount_usd": 2250000,
+     "evidence": {
+      "quote": "Dwelling: $2.25 million.",
+      "page": 6
+     }
+    },
+    {
+     "kind": "total_insured_value",
+     "amount_usd": 2500000,
+     "evidence": {
+      "quote": "Maximum TIV: $2.5 million.",
+      "page": 6
+     }
+    }
+   ]
+  }
+ ],
+ "review": {
+  "published": [
+   "Hiscox / Hiscox FloodPlus Residential"
+  ],
+  "held": [],
+  "notes": [],
+  "attempt": 2
+ }
+}

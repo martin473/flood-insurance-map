@@ -1,0 +1,143 @@
+{
+ "source": {
+  "document": "rt_specialty_2023.pdf",
+  "url": "https://rtspecialty.com/wp-content/uploads/2023/04/RT_PL_ResidentialPrimaryFloodComparison.pdf",
+  "published": "2023-04"
+ },
+ "extracted": {
+  "at": "2026-10-21T23:35:01+00:00",
+  "model": "ollama:gpt-oss:120b",
+  "prompt_version": "2026-10-21.4"
+ },
+ "verification": {
+  "kept": 18,
+  "rejected": 5,
+  "page_corrected": 0
+ },
+ "products": [
+  {
+   "insurer": "RT Specialty",
+   "program": "FloodPlus",
+   "availability": {
+    "mode": "all_except",
+    "states": [
+     "AK",
+     "HI",
+     "IL",
+     "KY"
+    ],
+    "evidence": {
+     "quote": "Nationwide, except AK, HI, IL, and KY",
+     "page": 1
+    }
+   },
+   "surplus_lines": null,
+   "elevation_certificate_required": false,
+   "waiting_period_days": 7,
+   "location_exclusions": [
+    {
+     "kind": "over_water",
+     "evidence": {
+      "quote": "Buildings partially or entirely over water",
+      "page": 1
+     }
+    },
+    {
+     "kind": "floodway",
+     "evidence": {
+      "quote": "Risks located in a FEMA Floodway",
+      "page": 1
+     }
+    },
+    {
+     "kind": "cbrs",
+     "evidence": {
+      "quote": "CBRA Zone Risks",
+      "page": 1
+     }
+    }
+   ],
+   "property_exclusions": [
+    {
+     "kind": "manufactured_home",
+     "detail": null,
+     "evidence": {
+      "quote": "Manufactured or Mobile homes",
+      "page": 1
+     }
+    },
+    {
+     "kind": "prior_losses",
+     "detail": "more than 1 loss OR 1 loss >$25k",
+     "evidence": {
+      "quote": "Properties with > 1 loss OR 1 loss >$25k",
+      "page": 1
+     }
+    },
+    {
+     "kind": "nfip_grandfathered",
+     "detail": "Grandfathered or CBRA properties",
+     "evidence": {
+      "quote": "Grandfathered or CBRA properties",
+      "page": 1
+     }
+    }
+   ],
+   "zone_conditions": [],
+   "limits": [
+    {
+     "kind": "dwelling",
+     "amount_usd": 1250000,
+     "evidence": {
+      "quote": "Dwelling Coverage Limits $1,250,000",
+      "page": 1
+     }
+    },
+    {
+     "kind": "contents",
+     "amount_usd": 875000,
+     "evidence": {
+      "quote": "Personal Property Limits $875,000",
+      "page": 1
+     }
+    },
+    {
+     "kind": "other_structures",
+     "amount_usd": 125000,
+     "evidence": {
+      "quote": "Other Structures $125,000",
+      "page": 1
+     }
+    },
+    {
+     "kind": "loss_of_use",
+     "amount_usd": 250000,
+     "evidence": {
+      "quote": "Loss Of Use $250,000",
+      "page": 1
+     }
+    }
+   ]
+  }
+ ],
+ "review": {
+  "published": [
+   "RT Specialty / FloodPlus"
+  ],
+  "held": [
+   {
+    "program": "Neptune Flood / Neptune Flood",
+    "why": "differs from the reviewed labels",
+    "extra": [
+     "location:floodway",
+     "sold_in_RI:not_stated"
+    ],
+    "missing": [
+     "sold_in_RI:yes"
+    ]
+   }
+  ],
+  "notes": [],
+  "attempt": 1
+ }
+}

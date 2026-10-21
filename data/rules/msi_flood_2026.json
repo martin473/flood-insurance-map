@@ -1,0 +1,106 @@
+{
+ "source": {
+  "document": "msi_flood_2026.pdf",
+  "url": "https://resources.msimga.com/hubfs/MSI%20Flood%20QRG%202025.pdf?hsLang=en",
+  "published": "2025-01"
+ },
+ "extracted": {
+  "at": "2026-10-21T23:35:16+00:00",
+  "model": "ollama:gpt-oss:120b",
+  "prompt_version": "2026-10-21.4"
+ },
+ "verification": {
+  "kept": 8,
+  "rejected": 3,
+  "page_corrected": 0
+ },
+ "products": [
+  {
+   "insurer": "MSI",
+   "program": "MSI Residential Flood",
+   "availability": {
+    "mode": "all_except",
+    "states": [
+     "AK",
+     "HI",
+     "KY",
+     "LA"
+    ],
+    "evidence": {
+     "quote": "Available in all states excluding: AK, HI, KY, & LA",
+     "page": 1
+    }
+   },
+   "surplus_lines": null,
+   "elevation_certificate_required": null,
+   "waiting_period_days": null,
+   "location_exclusions": [
+    {
+     "kind": "over_water",
+     "evidence": {
+      "quote": "Buildings located partially or fully over water",
+      "page": 1
+     }
+    },
+    {
+     "kind": "cbrs",
+     "evidence": {
+      "quote": "Buildings located in areas defined within the Coastal Barrier Resource Act",
+      "page": 1
+     }
+    },
+    {
+     "kind": "island",
+     "evidence": {
+      "quote": "Buildings located in islands and barrier islands for MSI flood",
+      "page": 1
+     }
+    },
+    {
+     "kind": "barrier_island",
+     "evidence": {
+      "quote": "Buildings located in islands and barrier islands for MSI flood",
+      "page": 1
+     }
+    }
+   ],
+   "property_exclusions": [
+    {
+     "kind": "severe_repetitive_loss",
+     "detail": null,
+     "evidence": {
+      "quote": "Severe Repetitive Loss (SRL) properties as defined by FEMA",
+      "page": 1
+     }
+    },
+    {
+     "kind": "subgrade_contents",
+     "detail": "more than 50% of the contents/personal property are located on a subgrade floor",
+     "evidence": {
+      "quote": "Risks where more than 50% of the contents/personal property are located on a subgrade floor",
+      "page": 1
+     }
+    }
+   ],
+   "zone_conditions": [],
+   "limits": [
+    {
+     "kind": "total_insured_value",
+     "amount_usd": 2500000,
+     "evidence": {
+      "quote": "MSI $2.5M Max Up to $2.5M",
+      "page": 1
+     }
+    }
+   ]
+  }
+ ],
+ "review": {
+  "published": [
+   "MSI / MSI Residential Flood"
+  ],
+  "held": [],
+  "notes": [],
+  "attempt": 1
+ }
+}
