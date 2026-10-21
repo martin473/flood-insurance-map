@@ -1,0 +1,54 @@
+name: eval
+
+# Runs the real extraction eval against Ollama Cloud. Manual only: it calls a model and
+# downloads the insurer PDFs, so it shouldn't run on every push.
+# Setup once: repo Settings > Secrets and variables > Actions > New secret OLLAMA_API_KEY.
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: "Space-separated models, e.g. ollama:nemotron-3-nano:30b ollama:gemma4:31b"
+        required: true
+        default: "ollama:nemotron-3-nano:30b"
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - name: Download the eval documents
+        run: floodrules fetch
+      - name: Run the eval
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          MODELS: ${{ inputs.models }}
+        run: |
+          if [ -z "$OLLAMA_API_KEY" ]; then
+            echo "::error::Add an OLLAMA_API_KEY secret under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          args=""
+          for m in $MODELS; do args="$args --model $m"; done
+          floodrules eval $args
+      - name: Post the results on the run page
+        if: always()
+        run: test -f evals/runs/latest.md && cat evals/runs/latest.md >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Save the report and model responses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-${{ github.run_number }}
+          # cache/ holds the raw model answers, so `floodrules eval --replay` can rescore them locally
+          path: |
+            evals/runs/
+            evals/cache/
+          retention-days: 30

@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rhode Island Flood Outlook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/esri-leaflet@3.0.12/dist/esri-leaflet.js"></script>
+<style>
+/* Layout: full-bleed map, left control panel on desktop, bottom sheet on phones */
+:root{
+  --bg:#f4f7f8; --panel:#ffffff; --fg:#14232b; --muted:#56686f; --line:#d8e1e4;
+  --accent:#0b5874; --flood-lo:#cfe8f5; --flood-hi:#4b47a3; --ins:#be185d; --ok:#2f7d4f;
+  --display:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f171b; --panel:#162228; --fg:#e3ebee; --muted:#93a4ab; --line:#29373e;
+  --accent:#62b4d4; --flood-hi:#7d79d6; --ins:#f472b6; --ok:#5fbf86; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f171b; --panel:#162228; --fg:#e3ebee; --muted:#93a4ab; --line:#29373e;
+  --accent:#62b4d4; --flood-hi:#7d79d6; --ins:#f472b6; --ok:#5fbf86; color-scheme:dark}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--display)}
+.app{display:grid;grid-template-columns:380px 1fr;height:100%}
+#map{height:100%;background:var(--bg)}
+aside{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;
+  padding-block:20px;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:20px;
+  display:flex;flex-direction:column;gap:22px;min-width:0}
+h1{font-size:1.45rem;font-weight:800;line-height:1.15;margin:0;text-wrap:balance}
+.lede{color:var(--muted);margin:6px 0 0;font-size:.93rem}
+.label{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+form{display:flex;gap:8px}
+input[type=search]{flex:1;min-width:0;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+button{font:inherit;font-weight:600;padding:10px 14px;border-radius:6px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--ins);outline-offset:2px}
+.status{font-size:.85rem;color:var(--muted);min-height:1.2em}
+
+/* year slider */
+.yearhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.year{font-size:1.9rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.rise{font-family:var(--mono);font-size:.82rem;color:var(--muted)}
+input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
+.ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+
+/* two layers */
+.layer{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:10px 0;border-top:1px solid var(--line)}
+.layer:first-of-type{border-top:0}
+.layer b{display:block;font-size:1rem}
+.layer small{color:var(--muted);display:block;font-size:.84rem;line-height:1.4;margin-top:2px}
+.ramp{height:10px;border-radius:3px;background:linear-gradient(90deg,var(--flood-lo),var(--flood-hi));margin-top:8px}
+.ramp-lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.68rem;color:var(--muted);margin-top:2px}
+.xhatch{display:inline-block;width:34px;height:16px;vertical-align:middle;margin-right:6px;border:2px solid var(--fg);box-sizing:border-box;border-radius:2px;
+  background:repeating-linear-gradient(45deg,transparent 0 4px,var(--fg) 4px 5px),repeating-linear-gradient(-45deg,transparent 0 4px,var(--fg) 4px 5px);opacity:.75}
+.sub{display:flex;align-items:center;font-size:.86rem;margin-top:8px}
+.insurers{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.ins-row{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);align-items:start}
+.ins-row b{font-size:.88rem;display:block}
+.ins-row small{color:var(--muted);font-size:.78rem;line-height:1.35;display:block}
+.qa{display:flex;flex-direction:column;gap:2px;padding:10px 0;border-top:1px solid var(--line)}
+.qa .q{margin:0;font-size:.82rem;font-weight:600;color:var(--muted)}
+.qa .a{margin:0;font-size:1.7rem;font-weight:800;line-height:1.1}
+.qa .s{margin:0;font-size:.92rem}
+.a-bad{color:var(--ins)} .a-warn{color:#b26b00} .a-good{color:var(--ok)} .a-unk{color:var(--muted)}
+.warn-line{color:#b26b00;font-weight:600}
+.more summary{cursor:pointer;font-weight:600;font-size:.88rem;color:var(--accent);padding:4px 0}
+.how{font-size:.8rem;margin-top:4px}
+.how a{color:var(--accent);font-weight:600}
+.how summary{cursor:pointer;color:var(--accent);font-weight:600}
+.nfip{margin:6px 0 0;padding-left:16px;font-size:.78rem;line-height:1.5}
+.ph{font-family:var(--mono);font-size:.76rem;white-space:nowrap;user-select:all}
+.copyrow{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:.82rem;margin-top:8px;flex-wrap:wrap}
+.copyrow button{padding:5px 10px;font-size:.8rem}
+.st{font-size:.74rem;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.st-yes{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.st-maybe{background:color-mix(in srgb,#d08a12 20%,transparent);color:#a86a00}
+.st-no{background:color-mix(in srgb,var(--ins) 16%,transparent);color:var(--ins)}
+.st-unk{background:var(--line);color:var(--muted)}
+.hatch{display:inline-block;width:34px;height:16px;vertical-align:middle;margin-right:6px;border:2px dotted var(--ins);box-sizing:border-box;
+  background:repeating-linear-gradient(-45deg,transparent 0 4px,var(--ins) 4px 5px);opacity:.85;border-radius:2px}
+
+/* property card */
+#report{border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fact{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fact .big{font-size:1.35rem;font-weight:800;line-height:1.1}
+.fact .big.flood{color:var(--flood-hi)}
+.pill{align-self:flex-start;display:inline-block;font-size:.78rem;font-weight:600;padding:3px 9px;border-radius:999px;color:#fff}
+.p-req{background:var(--ins)} .p-no{background:var(--ok)}
+.note{font-size:.88rem}
+.depths{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;align-items:end;height:84px}
+.bar{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:3px;min-width:0}
+.bar i{display:block;width:100%;background:var(--flood-hi);border-radius:3px 3px 0 0;min-height:2px}
+.bar span{font-family:var(--mono);font-size:.72rem;font-variant-numeric:tabular-nums}
+.yrs{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;font-family:var(--mono);font-size:.66rem;color:var(--muted);text-align:center}
+.fine{font-size:.76rem;color:var(--muted);line-height:1.45;margin:0}
+.fine a{color:var(--accent)}
+.leaflet-container{font-family:var(--display)}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:50% 50%}
+  aside{border-right:0;border-top:1px solid var(--line);
+    padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <header>
+      <h1>Rhode Island Flood Outlook</h1>
+      <p class="lede">Will it flood here, and can you insure it? Search an address or tap the map.</p>
+    </header>
+
+    <section>
+      <p class="label">Check a property</p>
+      <form id="search">
+        <input id="q" type="search" placeholder="Atlantic Ave, Westerly" autocomplete="street-address" aria-label="Rhode Island address">
+        <button type="submit">Find</button>
+      </form>
+      <div class="status" id="status"></div>
+    </section>
+
+    <section>
+      <div class="yearhead"><span class="year" id="year">2050</span><span class="rise" id="rise">seas +3 ft</span></div>
+      <input type="range" id="yr" min="0" max="5" step="1" value="2" aria-label="Year" aria-describedby="rise">
+      <div class="ticks"><span>Today</span><span>2040</span><span>2050</span><span>2070</span><span>2085</span><span>2100</span></div>
+    </section>
+
+    <section id="report" aria-live="polite">
+      <p class="label" style="margin:0">Loading example</p>
+      <div>Checking a sample location in Misquamicut…</div>
+    </section>
+
+    <section>
+      <label class="layer"><input type="checkbox" id="l-flood" checked>
+        <span><b>Flooding</b><small>How deep water gets in a major storm, the kind with a 1% chance of happening in any year, in the year you pick.</small>
+          <div class="ramp" aria-hidden="true"></div><div class="ramp-lbl"><span>Shallow</span><span>Deep</span></div></span></label>
+      <label class="layer"><input type="checkbox" id="l-ins" checked>
+        <span><b><span class="xhatch" aria-hidden="true"></span>Hard to insure</b><small>Most insurers won't cover homes here. Everywhere else in Rhode Island, flood insurance is available.</small></span></label>
+    </section>
+
+    <p class="fine">Screening tool, not an official flood determination. Flooding: University of Rhode Island <a href="https://stormtools-mainpage-crc-uri.hub.arcgis.com/" target="_blank" rel="noopener">STORMTOOLS</a> 100-year storm with sea level rise, coastal areas only. Insurance zone: FEMA Special Flood Hazard Area from the <a href="https://www.fema.gov/flood-maps/national-flood-hazard-layer" target="_blank" rel="noopener">National Flood Hazard Layer</a>. Years follow the NOAA high sea level curve for Newport used by the RI Coastal Resources Management Council. Insurer availability is modeled from published eligibility rules (Neptune and Hiscox FloodPlus: RT Specialty comparison, 2023; Hiscox FloodPlus brochure, 2024; MSI Residential Flood underwriting guide, 2026; NFIP: Coastal Barrier Resources Act, <a href="https://www.fws.gov/cbra/maps-and-data" target="_blank" rel="noopener">USFWS CBRS map</a>). Homeowners insurance: RI Joint Reinsurance Association (FAIR Plan) testimony, March 2026; What's Up Newp, March 2025. NFIP sellers: <a href="https://www.floodsmart.gov/get-insured/flood-insurance-provider" target="_blank" rel="noopener">FloodSmart provider list</a>, October 2026. Insurers make the final decision on each home and may add rules not shown here. Basemap: Esri. Address search: OpenStreetMap.</p>
+  </aside>
+  <div id="map" role="application" aria-label="Rhode Island flood map"></div>
+</div>
+
+<script>
+(function(){
+  var FEMA = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer";
+  var STORM = "https://maps.edc.uri.edu/stormtools/rest/services/Stormtools2020/Mosaic_100yr_SDE_TOTALDEPTH_All/ImageServer";
+  // STORMTOOLS image IDs 1..6 = 0, 2, 3, 5, 7, 10 ft of sea level rise
+  var SCEN = [
+    {id:1, ft:0,  yr:"Today"},
+    {id:2, ft:2,  yr:"2040"},
+    {id:3, ft:3,  yr:"2050"},
+    {id:4, ft:5,  yr:"2070"},
+    {id:5, ft:7,  yr:"2085"},
+    {id:6, ft:10, yr:"2100"}
+  ];
+  var cur = 2;
+  // NFIP authorization end date. Update when Congress extends it (fema.gov/flood-insurance/rules-legislation/congressional-reauthorization)
+  var NFIP_AUTH_UNTIL="2026-12-12", NFIP_AUTH_LABEL="December 12, 2026";
+
+  var map = L.map("map").setView([41.3260,-71.7920],15); // Misquamicut, Westerly
+  map.setMaxBounds([[40.9,-72.2],[42.3,-70.9]]);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    {maxZoom:19,maxNativeZoom:16,minZoom:9,attribution:"Esri"}).addTo(map);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+    {maxZoom:19,maxNativeZoom:16,pane:"shadowPane"}).addTo(map);
+
+  function lockRule(id){return {mosaicMethod:"esriMosaicLockRaster",lockRasterIds:[id]};}
+
+  var flood = L.esri.imageMapLayer({url:STORM,mosaicRule:lockRule(SCEN[cur].id),
+    renderingRule:{rasterFunction:"Stormtools_BlueGradient_TotalWaterDepth"},
+    format:"png32",opacity:0.75,attribution:"URI STORMTOOLS"});
+
+  // insurance zone: FEMA high-risk areas, one merged style, magenta hatch + dotted edge, no zone labels
+  var ins = L.esri.dynamicMapLayer({url:FEMA,format:"png32",transparent:true,attribution:"FEMA",
+    dynamicLayers:[{id:101,source:{type:"mapLayer",mapLayerId:28},definitionExpression:"SFHA_TF = 'T'",
+      drawingInfo:{showLabels:false,renderer:{type:"simple",symbol:{type:"esriSFS",style:"esriSFSBackwardDiagonal",color:[190,24,93,170],
+        outline:{type:"esriSLS",style:"esriSLSDot",color:[190,24,93,255],width:2}}}}}]});
+
+  // areas few insurers will cover: CBRS coastal barrier units (federal and most private bars) + FEMA floodways
+  var CBRS="https://gis1.wim.usgs.gov/server/rest/services/CBRSMapper/CoastalBarrierResourcesSystem/MapServer";
+  var xsym={type:"esriSFS",style:"esriSFSDiagonalCross",color:[30,40,46,150],outline:{type:"esriSLS",style:"esriSLSSolid",color:[30,40,46,230],width:1.5}};
+  var limited=L.layerGroup([
+    L.esri.dynamicMapLayer({url:CBRS,format:"png32",transparent:true,attribution:"USFWS CBRS",
+      dynamicLayers:[{id:301,source:{type:"mapLayer",mapLayerId:1},drawingInfo:{showLabels:false,renderer:{type:"simple",symbol:xsym}}}]}),
+    L.esri.dynamicMapLayer({url:FEMA,format:"png32",transparent:true,
+      dynamicLayers:[{id:102,source:{type:"mapLayer",mapLayerId:28},definitionExpression:"ZONE_SUBTY LIKE '%FLOODWAY%'",
+        drawingInfo:{showLabels:false,renderer:{type:"simple",symbol:xsym}}}]})
+  ]);
+  function redraw(){
+    [flood,ins,limited].forEach(function(l){ if(map.hasLayer(l)) map.removeLayer(l); });
+    if(document.getElementById("l-flood").checked) flood.addTo(map);
+    if(document.getElementById("l-ins").checked) limited.addTo(map); // always on top
+  }
+  document.getElementById("l-flood").addEventListener("change",redraw);
+  document.getElementById("l-ins").addEventListener("change",redraw);
+  redraw();
+
+  var yr=document.getElementById("yr"), yearEl=document.getElementById("year"), riseEl=document.getElementById("rise");
+  function setYear(i){
+    cur=i; var s=SCEN[i];
+    yearEl.textContent=s.yr;
+    riseEl.textContent=s.ft?"seas +"+s.ft+" ft":"today's sea level";
+    flood.setMosaicRule(lockRule(s.id));
+    if(last) draw();
+  }
+  yr.addEventListener("input",function(){setYear(+yr.value);});
+
+  // JSONP so lookups work regardless of CORS headers
+  var cbN=0;
+  function jsonp(url){
+    return new Promise(function(res,rej){
+      var name="__cb"+(cbN++), s=document.createElement("script");
+      var t=setTimeout(function(){cleanup();rej(new Error("timeout"));},15000);
+      function cleanup(){clearTimeout(t);delete window[name];s.remove();}
+      window[name]=function(d){cleanup();res(d);};
+      s.src=url+(url.indexOf("?")<0?"?":"&")+"callback="+name;
+      s.onerror=function(){cleanup();rej(new Error("network"));};
+      document.head.appendChild(s);
+    });
+  }
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+  var PT=function(lat,lng){return "&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&geometry="+lng+","+lat;};
+  // {sfha:bool, floodway:bool} or undefined if the lookup failed
+  function femaInfo(lat,lng){
+    return jsonp(FEMA+"/28/query?f=json&returnGeometry=false&outFields=SFHA_TF,ZONE_SUBTY,FLD_ZONE"+PT(lat,lng)).then(function(d){
+      if(d.error) return undefined;
+      var a=(d.features||[]).map(function(x){return x.attributes;});
+      var hi=a.filter(function(x){return x.SFHA_TF==="T";})[0];
+      return {sfha:!!hi, zone:hi?hi.FLD_ZONE:"",
+              floodway:a.some(function(x){return /FLOODWAY/i.test(x.ZONE_SUBTY||"");})};
+    }).catch(function(){return undefined;});
+  }
+  // {unit, type, fiDate} if inside a CBRS area, null if not, undefined if the lookup failed
+  function cbrsInfo(lat,lng){
+    return jsonp(CBRS+"/1/query?f=json&returnGeometry=false&outFields=*"+PT(lat,lng)).then(function(d){
+      if(d.error) return undefined;
+      var f=(d.features||[])[0]; if(!f) return null;
+      var a=f.attributes, dt=a.FI_Date;
+      if(typeof dt==="number") dt=new Date(dt).toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric",timeZone:"UTC"});
+      return {unit:a.Unit||"", type:a.CBRS_Type||"Coastal barrier area", fiDate:dt||""};
+    }).catch(function(){return undefined;});
+  }
+  // companies selling NFIP policies in Rhode Island (FloodSmart provider list, Oct 2026). Same federal policy and price from each.
+  var NFIP_RI=[["Allstate Insurance Company","855-435-7255"],["American Bankers Ins. Co. of Florida (Assurant)","800-423-4403"],["American Commerce Ins. Co.","800-562-4517"],
+    ["American Nat. Prop. & Casualty","417-887-4990"],["American Strategic Ins. Corp.","866-274-8765"],["Farm Family Casualty","518-431-5000"],["Hartford Fire Insurance Co.","860-547-7440"],
+    ["Homesite Insurance Company","800-466-3748"],["Liberty Mutual Fire Insurance Company","800-225-8297"],["National General Insurance Co.","800-462-2123"],["NFIP Direct Servicing Agent","800-638-6620"],
+    ["NGM Insurance Company","603-352-4000"],["Philadelphia Indemnity Ins. Co.","877-672-7945 ext. 8295"],["Pilgrim Insurance Company","617-956-6000"],["Privilege Underwriters","888-813-7873"],
+    ["QBE Insurance Corporation","877-372-3996"],["Selective Ins. Co. of America","877-348-0552"],["Union Mutual Fire Ins. Co.","800-300-5261"],["USAA General Indemnity Company","800-531-8722"],
+    ["Wright National Flood Ins. Co.","866-373-5663"]];
+  // town name, used for MSI's island rule
+  var ISLAND_TOWNS=["Newport","Middletown","Portsmouth","Jamestown","New Shoreham"];
+  var placeAddr="";
+  function townOf(lat,lng){
+    return fetch("https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&addressdetails=1&lat="+lat+"&lon="+lng)
+      .then(function(r){return r.json();})
+      .then(function(r){var a=r.address||{};
+        placeAddr=[[a.house_number,a.road].filter(Boolean).join(" "),a.town||a.city||a.village||"",a.postcode||""].filter(Boolean).join(", ");
+        return a.town||a.city||a.village||a.municipality||"";})
+      .catch(function(){placeAddr="";return undefined;});
+  }
+
+  // availability per insurer from published rules: yes | maybe | no | unk
+  function insurers(fe,cb,town){
+    var inCB=!!cb, unknownCB=cb===undefined, onIsland=town&&ISLAND_TOWNS.indexOf(town)>=0;
+    var out=[];
+    out.push({n:"NFIP (federal program)",
+      st: unknownCB?"unk":(inCB?"maybe":"yes"),
+      how: '<details><summary>Sold by '+NFIP_RI.length+' companies in Rhode Island, same price from each</summary><ul class="nfip">'+
+        NFIP_RI.map(function(c){return '<li>'+c[0]+' <span class="ph">'+c[1]+'</span></li>';}).join("")+'</ul></details>',
+      why: unknownCB?"Couldn't check the coastal barrier map." : inCB ? "Coastal barrier area ("+cb.type+(cb.unit?", unit "+cb.unit:"")+"). Only homes built before "+(cb.fiDate||"the area's designation date")+" can get federal flood insurance." : "Available to every Rhode Island property."});
+    out.push({n:"Neptune Flood",
+      st: unknownCB?"unk":(inCB?"no":"yes"),
+      how:'<a href="https://neptuneflood.com/" target="_blank" rel="noopener">Get a quote online at neptuneflood.com</a>',
+      why: inCB?"Doesn't cover coastal barrier (CBRA) areas.":"Available. Not offered for homes over water or manufactured homes."});
+    var fw=fe&&fe.floodway, sf=fe&&fe.sfha;
+    out.push({n:"Hiscox FloodPlus",
+      st: (fe===undefined||unknownCB)?"unk":(inCB||fw?"no":(sf?"maybe":"yes")),
+      how:"Through an independent agent or broker (sold as surplus lines).",
+      why: inCB?"Doesn't cover coastal barrier (CBRA) areas.":fw?"Doesn't cover homes in a floodway.":sf?"In the high-risk zone, only if the home sits above the flood elevation.":"Available. Not offered for condos or homes with more than one past flood claim."});
+    out.push({n:"MSI Residential Flood",
+      st: unknownCB||town===undefined?"unk":(inCB||onIsland?"no":"yes"),
+      how:'Through MSI\'s partner agents. Email <span class="ph">Contactflood@msimga.com</span> to be connected.',
+      why: inCB?"Doesn't cover coastal barrier (CBRA) areas.":onIsland?"Doesn't cover homes on islands ("+town+").":"Available. Not offered for homes over water or severe repeat-loss homes."});
+    out.push({n:"ShoreOne (home + flood)",st:"unk",why:"Rules not published yet. We've asked.",how:"Through a Rhode Island independent agent."});
+    return out;
+  }
+  // The STORMTOOLS raster has scattered no-data cells (beaches, dunes), so sample a ~20 m neighborhood
+  // around the point in one getSamples call and take the deepest water found.
+  // The service answers with an error when every sample is no-data; that means dry (0), not a failure.
+  function depth(lat,lng,id){
+    var dl=0.00018, dg=0.00024, offs=[[0,0],[dl,0],[-dl,0],[0,dg],[0,-dg],[dl,dg],[-dl,-dg],[dl,-dg],[-dl,dg]];
+    var mp={points:offs.map(function(o){return [lng+o[1],lat+o[0]];}),spatialReference:{wkid:4326}};
+    var u=STORM+"/getSamples?f=json&geometryType=esriGeometryMultipoint&returnFirstValueOnly=true"+
+      "&geometry="+encodeURIComponent(JSON.stringify(mp))+"&mosaicRule="+encodeURIComponent(JSON.stringify(lockRule(id)));
+    return jsonp(u).then(function(d){
+      if(d && d.error) return 0;
+      var v=((d&&d.samples)||[]).map(function(x){return parseFloat(x.value);}).filter(function(x){return isFinite(x)&&x>0;});
+      return v.length?Math.max.apply(null,v):0;
+    }).catch(function(){return null;});
+  }
+
+  var marker=null, last=null, report=document.getElementById("report"), status=document.getElementById("status");
+
+  function draw(){
+    var d=last.depths, s=SCEN[cur];
+    var failed=d.every(function(v){return v===null;});
+    var max=Math.max.apply(null,d.map(function(v){return v||0;}));
+    var c=d[cur], first=-1;
+    for(var i=0;i<d.length;i++){ if(d[i]>0){first=i;break;} }
+    var when=s.ft?"by "+s.yr:"today";
+    var sfha=last.fema?last.fema.sfha:undefined;
+
+    // Q1: will it flood here?
+    var fA,fS,fC;
+    if(failed && sfha===undefined){ fA="Couldn't check"; fS="The flood map services didn't respond. Try again in a minute."; fC="unk"; }
+    else if(!failed && c>0){ fA="Yes"; fS="About "+c.toFixed(1)+" ft of water, including storm waves, in a major storm "+when+"."; fC="bad"; }
+    else if(!failed && max>0){ fA="Not "+when; fS="It starts flooding in a major storm around "+(first===0?"today":SCEN[first].yr)+"."; fC="warn"; }
+    else if(sfha){ var z=last.fema.zone||"";
+      if(/^V/.test(z)){ fA="Likely"; fS="FEMA maps this as coastal high risk with storm waves (zone "+z+"). URI's storm model has no data at this spot, so depth and timing aren't available."; fC="bad"; }
+      else { fA="Likely"; fS="FEMA maps this as high flood risk (zone "+z+"), possibly from rivers or rain. URI's coastal model shows no storm flooding here."; fC="warn"; } }
+    else { fA="No"; fS="Not in a major storm, even by 2100."; fC="good"; }
+
+    // Q2: can it be insured?
+    var list=insurers(last.fema,last.cbrs,last.town);
+    var yes=list.filter(function(x){return x.st==="yes";}), maybe=list.filter(function(x){return x.st==="maybe";});
+    var priv=yes.filter(function(x){return x.n.indexOf("NFIP")<0;}).length;
+    var nfip=list[0];
+    var iA,iS,iC;
+    if(nfip.st==="unk" && !yes.length){ iA="Couldn't check"; iS="The coverage map didn't respond. Try again in a minute."; iC="unk"; }
+    else if(nfip.st==="yes"){ iA="Yes"; iS="Federal flood insurance (NFIP)"+(priv?" plus "+priv+" private insurer"+(priv>1?"s":""):"")+" offer coverage here."; iC="good"; }
+    else if(yes.length){ iA="Yes, privately"; iS=yes.length+" private insurer"+(yes.length>1?"s":"")+" offer coverage here."; iC="good"; }
+    else if(maybe.length){ iA="Limited"; iS=nfip.st==="maybe"?"Federal insurance only if the home was built before "+(last.cbrs&&last.cbrs.fiDate||"this area was protected")+". Most private insurers won't cover it.":"Only if the home sits above the flood elevation."; iC="warn"; }
+    else { iA="Hard to insure"; iS="The insurers we checked don't cover this spot."; iC="bad"; }
+    if(sfha) iS+=" Lenders require it here.";
+    // the federal program runs on short-term extensions from Congress; flag when it's close to lapsing
+    var daysLeft=Math.round((new Date(NFIP_AUTH_UNTIL+"T23:59:00-05:00")-new Date())/864e5);
+    var nfipWarn = nfip.st==="no"||nfip.st==="unk" ? "" : daysLeft<0
+      ? '<p class="s warn-line">The federal program\'s authorization lapsed on '+NFIP_AUTH_LABEL+'. New federal policies can\'t be sold until Congress renews it. Private insurers are unaffected.</p>'
+      : daysLeft<=90 ? '<p class="s fine">Federal flood insurance is authorized through '+NFIP_AUTH_LABEL+'. Congress has always renewed it, but new sales pause during a lapse.</p>' : "";
+
+    // Q3: homeowners insurance. Always available via the state FAIR Plan (RIJRA); the question is private vs FAIR Plan.
+    var SHORE_COUNTIES=["Charlestown","Exeter","Hopkinton","Narragansett","New Shoreham","North Kingstown","Richmond","South Kingstown","Westerly",
+                        "Jamestown","Little Compton","Middletown","Newport","Portsmouth","Tiverton"];
+    var coastalNow=(!failed && d[0]>0) || /^V/.test((last.fema&&last.fema.zone)||"");
+    var hiNonrenew=last.town && SHORE_COUNTIES.indexOf(last.town)>=0;
+    var hA,hS,hC;
+    if(coastalNow){ hA="Yes, but harder"; hC="warn";
+      hS="This spot floods in a major storm today, and insurers limit how many homes like this they cover. If private insurers say no, the state's FAIR Plan must offer a policy, typically at 40 to 50% higher cost."; }
+    else if(hiNonrenew){ hA="Yes"; hC="good";
+      hS="Private insurers write homes here, but "+(["Jamestown","Little Compton","Middletown","Newport","Portsmouth","Tiverton"].indexOf(last.town)>=0?"Newport":"Washington")+" County has some of the highest non-renewal rates in the country. Get quotes early in your purchase."; }
+    else if(last.town===undefined && failed){ hA="Couldn't check"; hC="unk"; hS="The map services didn't respond. Try again in a minute."; }
+    else { hA="Yes"; hC="good"; hS="Widely available from private insurers. Homeowners insurance doesn't cover flooding, so that's a separate policy."; }
+
+    var LBL={yes:"Available",maybe:"Maybe",no:"Not offered",unk:"Unknown"};
+    var who='<details class="more"><summary>Who sells it here and how to buy</summary><div class="insurers">'+
+      list.map(function(x){return '<div class="ins-row"><div><b>'+x.n+'</b><small>'+esc(x.why)+'</small>'+(x.st!=="no"&&x.how?'<div class="how">'+x.how+'</div>':'')+'</div><span class="st st-'+x.st+'">'+LBL[x.st]+'</span></div>';}).join("")+
+      '</div>'+(placeAddr?'<div class="copyrow"><span>Address for quotes: <b id="qaddr">'+esc(placeAddr)+'</b></span><button type="button" id="copyaddr">Copy</button></div>':'')+
+      '<p class="fine" style="margin-top:6px">Based on each insurer\'s published rules. The insurer makes the final decision on each home.</p></details>';
+
+    var chart="";
+    if(!failed && max>0){
+      var bars=d.map(function(v,i){var h=Math.round((v||0)/max*64);
+        return '<div class="bar"><span>'+(v===null?"–":(v?v.toFixed(1):"0"))+'</span><i style="height:'+h+'px;'+(i===cur?'':'opacity:.35')+'"></i></div>';}).join("");
+      chart='<details class="more"><summary>Flood depth year by year</summary><div class="depths" style="margin-top:8px">'+bars+'</div><div class="yrs">'+
+        SCEN.map(function(x){return "<span>"+x.yr+"</span>";}).join("")+'</div></details>';
+    }
+
+    report.innerHTML='<p class="label" style="margin:0">'+esc(last.label)+'</p>'+
+      '<div class="qa"><p class="q">Will it flood here?</p><p class="a a-'+fC+'">'+fA+'</p><p class="s">'+fS+'</p></div>'+
+      '<div class="qa"><p class="q">Can it get flood insurance?</p><p class="a a-'+iC+'">'+iA+'</p><p class="s">'+iS+'</p>'+nfipWarn+'</div>'+
+      '<div class="qa"><p class="q">Can it get homeowners insurance?</p><p class="a a-'+hC+'">'+hA+'</p><p class="s">'+hS+'</p></div>'+
+      chart+who;
+    var cb=document.getElementById("copyaddr");
+    if(cb) cb.addEventListener("click",function(){
+      var t=document.getElementById("qaddr").textContent;
+      (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){cb.textContent="Copied";})
+        .catch(function(){var r=document.createRange();r.selectNodeContents(document.getElementById("qaddr"));var sel=getSelection();sel.removeAllRanges();sel.addRange(r);});
+    });
+  }
+
+  function lookup(lat,lng,label){
+    if(marker) marker.setLatLng([lat,lng]);
+    else marker=L.circleMarker([lat,lng],{radius:8,weight:3,color:"#14232b",fillColor:"#fff",fillOpacity:1}).addTo(map);
+    label=label||(lat.toFixed(5)+", "+lng.toFixed(5));
+    report.innerHTML='<p class="label" style="margin:0">'+esc(label)+'</p><div>Checking flooding and insurers…</div>';
+    Promise.all([femaInfo(lat,lng),Promise.all(SCEN.map(function(s){return depth(lat,lng,s.id);})),cbrsInfo(lat,lng),townOf(lat,lng)]).then(function(r){
+      last={label:label,fema:r[0],depths:r[1],cbrs:r[2],town:r[3]}; draw();
+    });
+  }
+
+  map.on("click",function(e){lookup(e.latlng.lat,e.latlng.lng);});
+
+  document.getElementById("search").addEventListener("submit",function(e){
+    e.preventDefault();
+    var q=document.getElementById("q").value.trim(); if(!q) return;
+    if(!/rhode island|\bri\b/i.test(q)) q+=", Rhode Island";
+    status.textContent="Searching…";
+    fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&viewbox=-71.95,42.03,-71.1,41.1&bounded=1&q="+encodeURIComponent(q))
+      .then(function(r){return r.json();})
+      .then(function(r){
+        if(!r.length){status.textContent="No match in Rhode Island. Try adding the town.";return;}
+        status.textContent="";
+        var lat=+r[0].lat,lng=+r[0].lon;
+        map.setView([lat,lng],16);
+        lookup(lat,lng,r[0].display_name.split(",").slice(0,3).join(","));
+      })
+      .catch(function(){status.textContent="Address search is unavailable. Tap the map instead.";});
+  });
+
+  lookup(41.3260,-71.7920,"Example: Misquamicut, Westerly");
+})();
+</script>
+</body>
+</html>

@@ -1,4 +1,13 @@
-# flood-rules
+# Flood insurance map
+
+[![ci](https://github.com/martin473/flood-insurance-map/actions/workflows/ci.yml/badge.svg)](https://github.com/martin473/flood-insurance-map/actions/workflows/ci.yml)
+
+Two parts:
+
+- **`map/`**: the Rhode Island Flood Outlook, a single HTML page. Tap a property to see whether a major storm floods it as seas rise (URI STORMTOOLS), whether flood insurance is available and required, and whether homeowners insurance will be harder to get. Open it in a browser; it loads FEMA, URI, USFWS and NOAA data live.
+- **`floodrules/`**: the Python service below, which extracts insurers' eligibility rules from their PDFs and powers the map's insurance answers.
+
+## floodrules
 
 Private flood insurers publish their eligibility rules in PDFs: underwriting guides, brochures, broker comparison sheets. This service reads those PDFs with a language model (through the Ollama API, or Claude), turns the rules into typed data, throws out any rule it can't trace back to a quote in the document, and uses what's left to answer "which insurers might cover this property?"
 
@@ -41,6 +50,10 @@ curl -s localhost:8000/coverage -H 'content-type: application/json' \
 ```
 
 ## Evals
+
+**In CI:** Actions > eval > Run workflow, then enter one or more model names. It downloads the PDFs, runs the eval against Ollama Cloud, posts the results table on the run page, and saves the report and raw model answers as an artifact. Download the artifact into `evals/` to rescore it locally with `--replay`. It needs an `OLLAMA_API_KEY` repository secret (Settings > Secrets and variables > Actions).
+
+**Locally:**
 
 ```bash
 floodrules eval --model ollama:gemma4:31b --model ollama:<another model>   # compare models
