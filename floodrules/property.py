@@ -141,9 +141,11 @@ def _insurance_answer(decisions: list[Decision], sfha: bool | None, cbrs: dict |
     if nfip.status == Status.AVAILABLE:
         extra = f" plus {len(yes)} private insurer{'s' if len(yes) != 1 else ''}" if yes else ""
         note = "" if private_rules else " No private insurers' rules are loaded yet."
-        return Answer(answer="Yes", level="good", detail=f"Federal flood insurance (NFIP){extra} offer coverage here.{suffix}{note}")
+        verb = "offer" if yes else "offers"
+        return Answer(answer="Yes", level="good", detail=f"Federal flood insurance (NFIP){extra} {verb} coverage here.{suffix}{note}")
     if yes:
-        return Answer(answer="Yes, privately", level="good", detail=f"{len(yes)} private insurer{'s' if len(yes) != 1 else ''} offer coverage here.{suffix}")
+        verb = "offer" if len(yes) != 1 else "offers"
+        return Answer(answer="Yes, privately", level="good", detail=f"{len(yes)} private insurer{'s' if len(yes) != 1 else ''} {verb} coverage here.{suffix}")
     if cbrs:
         when = iso(cbrs["flood_insurance_date"]) or "this area was protected"
         return Answer(answer="Limited", level="warn",

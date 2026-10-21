@@ -45,10 +45,16 @@ jobs:
         run: |
           if [ -z "$OLLAMA_API_KEY" ]; then echo "::error::Add the OLLAMA_API_KEY secret."; exit 1; fi
           case "$ATTEMPTS" in ''|*[!0-9]*) echo "::error::attempts must be a number"; exit 1;; esac
-          floodrules publish-rules --model "$MODEL" --attempts "$ATTEMPTS" --report review.md
+          set -o pipefail
+          floodrules publish-rules --model "$MODEL" --attempts "$ATTEMPTS" --report review.md 2>&1 | tee run.log
       - name: Post the review on the run page
         if: always()
-        run: test -f review.md && cat review.md >> "$GITHUB_STEP_SUMMARY" || true
+        run: |
+          test -f review.md && cat review.md >> "$GITHUB_STEP_SUMMARY"
+          # also as an annotation, which shows on the run page and through the checks API
+          enc() { sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}'; }
+          if test -f review.md; then echo "::notice title=Rules review::$(enc < review.md)"; fi
+          if test -f run.log; then echo "::notice title=Run log (last 40 lines)::$(tail -40 run.log | enc)"; fi
       - name: Commit the published rules
         run: |
           git config user.name "github-actions[bot]"
