@@ -1,6 +1,6 @@
 import pytest
 
-from floodrules.claude import Claude, ClaudeError, Usage
+from floodrules.claude import Claude, ClaudeError, ModelError, Usage
 from floodrules.extract import ClaudeExtractor, ReplayExtractor, cache_path, run_extraction
 from floodrules.pdftext import read_pdf
 
@@ -73,7 +73,7 @@ def test_answer_without_tool_call_is_an_error(guide_pdf):
 
 def test_schema_violations_are_reported(guide_pdf):
     api = FakeAPI(tool_input={"products": [{"insurer": "X"}]})
-    with pytest.raises(ClaudeError, match="didn't match the schema"):
+    with pytest.raises(ModelError, match="didn't match the schema"):
         run_extraction(read_pdf(guide_pdf), ClaudeExtractor(Claude(transport=api)))
 
 

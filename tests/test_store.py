@@ -29,8 +29,7 @@ def test_newest_extraction_wins(fake_api, guide_pdf, tmp_path):
 
 def test_cli_extract_prints_and_saves(fake_api, guide_pdf, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "CACHE", tmp_path / "cache")
-    real = Claude
-    monkeypatch.setattr(cli, "Claude", lambda model: real(model=model, transport=fake_api))
+    monkeypatch.setattr(cli, "make_extractor", lambda model: ClaudeExtractor(Claude(model=model, transport=fake_api)))
     monkeypatch.setattr(store.save, "__defaults__", (None, tmp_path / "rules"))
     assert cli.main(["extract", str(guide_pdf), "--save", "--url", "https://example.com/g.pdf"]) == 0
     out = json.loads(capsys.readouterr().out)

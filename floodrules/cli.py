@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,12 +19,13 @@ from pathlib import Path
 import requests
 
 from . import store
-from .claude import Claude, Usage
+from .claude import Usage
 from .evaluation import CATEGORIES, combine, load_labels, score
-from .extract import PROMPT_VERSION, ClaudeExtractor, ReplayExtractor, run_extraction
+from .extract import PROMPT_VERSION, ReplayExtractor, make_extractor, run_extraction
 from .pdftext import read_pdf
 
 ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_MODEL = os.environ.get("FLOODRULES_MODEL", "claude-haiku-5-5")
 CACHE = ROOT / "evals" / "cache"
 RUNS = ROOT / "evals" / "runs"
 
@@ -50,7 +52,7 @@ def cmd_fetch(args) -> int:
 
 def cmd_extract(args) -> int:
     doc = read_pdf(args.pdf)
-    run = run_extraction(doc, ClaudeExtractor(Claude(model=args.model)), cache_dir=CACHE)
+    run = run_extraction(doc, make_extractor(args.model), cache_dir=CACHE)
     print(json.dumps({"products": [p.model_dump(mode="json") for p in run.verified.products],
                       "rejected": [r.__dict__ for r in run.report.rejected],
                       "usage": {**run.usage.__dict__, "cost_usd": run.cost_usd}}, indent=1))
@@ -60,7 +62,7 @@ def cmd_extract(args) -> int:
 
 
 def evaluate_model(model: str, sources: list[dict], replay: bool, repeat: int) -> dict:
-    extractor = ReplayExtractor(CACHE, model) if replay else ClaudeExtractor(Claude(model=model))
+    extractor = ReplayExtractor(CACHE, model) if replay else make_extractor(model)
     raw_scores, ver_scores, docs = [], [], []
     for d in sources:
         path = ROOT / d["file"]
@@ -103,7 +105,9 @@ def _pct(x: float | None) -> str:
     return "n/a" if x is None else f"{x:.0%}"
 
 
-def _cost(c: dict | None) -> str:
+def _cost(c: dict | None, model: str = "") -> str:
+    if model.startswith("ollama:"):
+        return "$0 (local)" if c else "n/a"
     return "n/a" if not c or c.get("cost_usd") is None else f"${c['cost_usd']:.4f}"
 
 
@@ -119,7 +123,7 @@ def render_markdown(results: list[dict]) -> str:
         found = f"{r['totals']['verified']['products_matched']}/{r['totals']['verified']['products_expected']}"
         lines.append(f"| {r['model']}{' (replay)' if r['replay'] else ''} | {pct(raw['precision'])} | {pct(raw['recall'])} | {pct(raw['f1'])} | "
                      f"{pct(ver['precision'])} | {pct(ver['recall'])} | {found} | "
-                     f"{_cost(c1)} | {_cost(c2)} | {c1['latency_s']:.1f}s |")
+                     f"{_cost(c1, r['model'])} | {_cost(c2, r['model'])} | {c1['latency_s']:.1f}s |")
     lines += ["", "## Recall by category (verified)", "", "| Model | " + " | ".join(CATEGORIES) + " |", "|---|" + "---|" * len(CATEGORIES)]
     for r in results:
         cats = r["totals"]["verified"]["by_category"]
@@ -144,7 +148,7 @@ def cmd_eval(args) -> int:
     sources = _sources(Path(args.sources))
     if args.only:
         sources = [s for s in sources if s["id"] in args.only]
-    results = [evaluate_model(m, sources, args.replay, args.repeat) for m in (args.model or ["claude-haiku-5-5"])]
+    results = [evaluate_model(m, sources, args.replay, args.repeat) for m in (args.model or [DEFAULT_MODEL])]
     RUNS.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = RUNS / f"{stamp}.json"
@@ -177,12 +181,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("fetch", help="download the eval PDFs listed in evals/sources.json").set_defaults(fn=cmd_fetch)
     e = sub.add_parser("extract", help="extract and verify rules from one PDF")
     e.add_argument("pdf")
-    e.add_argument("--model", default="claude-haiku-5-5")
+    e.add_argument("--model", default=DEFAULT_MODEL, help="Claude model ID, or ollama:<name> for a local model")
     e.add_argument("--save", action="store_true", help="write verified rules to data/rules")
     e.add_argument("--url", help="source URL recorded with saved rules")
     e.set_defaults(fn=cmd_extract)
     v = sub.add_parser("eval", help="score extraction against the labeled documents")
-    v.add_argument("--model", action="append", help="repeat to compare models")
+    v.add_argument("--model", action="append", help="Claude model ID or ollama:<name>; repeat to compare models")
     v.add_argument("--replay", action="store_true", help="rescore saved responses without calling the API")
     v.add_argument("--repeat", type=int, default=1, help="run each document N times; run 2 shows the prompt-caching discount")
     v.add_argument("--only", action="append", help="limit to these document ids")

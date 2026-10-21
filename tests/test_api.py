@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from floodrules import api, store  # noqa: E402
 from floodrules.claude import Claude  # noqa: E402
+from floodrules.extract import ClaudeExtractor  # noqa: E402
 
 from conftest import FakeAPI  # noqa: E402
 
@@ -15,8 +16,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DEFAULT_DIR", rules_dir)
     monkeypatch.setattr(store.load_all, "__defaults__", (rules_dir,))
     monkeypatch.setattr(store.save, "__defaults__", (None, rules_dir))
-    real = Claude
-    monkeypatch.setattr(api, "Claude", lambda model: real(model=model, transport=FakeAPI()))
+    monkeypatch.setattr(api, "make_extractor", lambda model: ClaudeExtractor(Claude(model=model, transport=FakeAPI())))
     return TestClient(api.app)
 
 

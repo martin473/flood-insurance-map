@@ -3,7 +3,9 @@ import json
 import pytest
 
 from floodrules import cli
+from floodrules.claude import Claude
 from floodrules.evaluation import combine, facts, load_labels, score
+from floodrules.extract import ClaudeExtractor
 from floodrules.schemas import Extraction
 
 from conftest import LABELS, TOOL_INPUT
@@ -68,8 +70,7 @@ def eval_env(tmp_path, monkeypatch, guide_pdf, fake_api):
     monkeypatch.setattr(cli, "ROOT", tmp_path)
     monkeypatch.setattr(cli, "CACHE", tmp_path / "evals" / "cache")
     monkeypatch.setattr(cli, "RUNS", tmp_path / "evals" / "runs")
-    real = cli.Claude
-    monkeypatch.setattr(cli, "Claude", lambda model: real(model=model, transport=fake_api))
+    monkeypatch.setattr(cli, "make_extractor", lambda model: ClaudeExtractor(Claude(model=model, transport=fake_api)))
     return tmp_path, sources, fake_api
 
 

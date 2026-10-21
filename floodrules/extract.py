@@ -10,7 +10,8 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from .claude import Claude, ClaudeError, Usage
+from .claude import Claude, ModelError, Usage
+from .ollama import Ollama
 from .pdftext import Document
 from .schema_export import tool_schema
 from .schemas import Extraction
@@ -58,6 +59,8 @@ class Extractor(Protocol):
 
 
 class ClaudeExtractor:
+    saves_cache = True
+
     def __init__(self, client: Claude):
         self.client = client
         self.model = client.model
@@ -66,6 +69,28 @@ class ClaudeExtractor:
         res = self.client.call_tool(system=SYSTEM, document=doc.tagged(), instruction=INSTRUCTION, tool_name=TOOL_NAME,
                                     tool_description=TOOL_DESCRIPTION, input_schema=SCHEMA)
         return res.tool_input, res.usage
+
+
+class OllamaExtractor:
+    """Local model via Ollama. Model names carry an `ollama:` prefix, e.g. `ollama:qwen2.5:14b`."""
+
+    saves_cache = True
+
+    def __init__(self, client: Ollama):
+        self.client = client
+        self.model = f"ollama:{client.model}"
+
+    def tool_input(self, doc: Document) -> tuple[dict, Usage]:
+        return self.client.json_call(system=SYSTEM.replace("by calling the record_eligibility_rules tool exactly once", "with a single JSON object"),
+                                     document=doc.tagged(), instruction=INSTRUCTION.replace("by calling record_eligibility_rules", "as JSON"),
+                                     schema=SCHEMA)
+
+
+def make_extractor(model: str) -> Extractor:
+    """`ollama:<name>` runs locally through Ollama; anything else goes to the Claude API."""
+    if model.startswith("ollama:"):
+        return OllamaExtractor(Ollama(model.split(":", 1)[1]))
+    return ClaudeExtractor(Claude(model=model))
 
 
 class ReplayExtractor:
@@ -85,7 +110,8 @@ class ReplayExtractor:
 
 def cache_path(cache_dir: Path, doc: Document, model: str) -> Path:
     digest = hashlib.sha256((doc.tagged() + PROMPT_VERSION).encode()).hexdigest()[:12]
-    return Path(cache_dir) / f"{Path(doc.name).stem}.{model}.{digest}.json"
+    safe_model = model.replace(":", "_").replace("/", "_")   # ollama:qwen2.5:14b -> ollama_qwen2.5_14b
+    return Path(cache_dir) / f"{Path(doc.name).stem}.{safe_model}.{digest}.json"
 
 
 def run_extraction(doc: Document, extractor: Extractor, cache_dir: str | Path | None = None) -> ExtractionRun:
@@ -93,10 +119,10 @@ def run_extraction(doc: Document, extractor: Extractor, cache_dir: str | Path | 
     try:
         extraction = Extraction.model_validate(raw)
     except ValidationError as e:
-        raise ClaudeError(f"Tool input didn't match the schema: {e.error_count()} errors, first: {e.errors()[0]['msg']}") from e
+        raise ModelError(f"Tool input didn't match the schema: {e.error_count()} errors, first: {e.errors()[0]['msg']}") from e
 
     verified, report = Verifier(doc).check(extraction)
-    if cache_dir is not None and isinstance(extractor, ClaudeExtractor):
+    if cache_dir is not None and getattr(extractor, "saves_cache", False):
         p = cache_path(Path(cache_dir), doc, extractor.model)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps({"tool_input": raw, "usage": usage.__dict__}, indent=1))

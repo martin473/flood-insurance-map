@@ -16,9 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from . import store
-from .claude import Claude, ClaudeError
+from .claude import ModelError
 from .engine import Decision, PropertyFacts, evaluate_all
-from .extract import ClaudeExtractor, run_extraction
+from .extract import make_extractor, run_extraction
 from .pdftext import read_pdf
 
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
@@ -52,7 +52,7 @@ def coverage(facts: PropertyFacts) -> CoverageResponse:
 
 
 @app.post("/extract")
-async def extract(file: UploadFile = File(...), model: str = Form("claude-haiku-5-5"),
+async def extract(file: UploadFile = File(...), model: str = Form(os.environ.get("FLOODRULES_MODEL", "claude-haiku-5-5")),
                   save: bool = Form(False), source_url: str | None = Form(None)) -> dict:
     data = await file.read()
     if len(data) > MAX_UPLOAD_BYTES:
@@ -64,8 +64,8 @@ async def extract(file: UploadFile = File(...), model: str = Form("claude-haiku-
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     try:
-        run = run_extraction(doc, ClaudeExtractor(Claude(model=model)))
-    except ClaudeError as e:
+        run = run_extraction(doc, make_extractor(model))
+    except ModelError as e:
         raise HTTPException(502, str(e)) from e
     saved = str(store.save(run, source_url)) if save else None
     return {

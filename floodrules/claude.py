@@ -29,7 +29,11 @@ LONG_PROMPT_TOKENS = 100_000
 Transport = Callable[[dict[str, Any], dict[str, str]], tuple[int, dict[str, Any], dict[str, str]]]
 
 
-class ClaudeError(RuntimeError):
+class ModelError(RuntimeError):
+    """Any failure getting a usable answer from a model backend."""
+
+
+class ClaudeError(ModelError):
     pass
 
 
@@ -51,6 +55,8 @@ class Usage:
                        ("input_tokens", "output_tokens", "cache_write_tokens", "cache_read_tokens", "latency_s", "calls")))
 
     def cost_usd(self, model: str) -> float | None:
+        if model.startswith("ollama:"):
+            return 0.0   # runs locally; no per-token charge
         rates = PRICING.get(model)
         if rates is None:
             return None
