@@ -262,8 +262,8 @@ def cmd_publish_rules(args) -> int:
     from .publish import review
     docs = [d for d in _sources(Path(args.sources)) if d.get("publish") and (not args.only or d["id"] in args.only)]
     rules_dir = Path(args.rules_dir) if args.rules_dir else store.DEFAULT_DIR
-    extractor = make_extractor(args.model)
-    lines = [f"## Rules review ({args.model})", "", "| Document | Published | Held back |", "|---|---|---|"]
+    models = args.model or [DEFAULT_MODEL]
+    lines = [f"## Rules review ({', '.join(models)})", "", "| Document | Published | Held back | Model |", "|---|---|---|---|"]
     published = 0
     for d in docs:
         path = ROOT / d["file"]
@@ -273,21 +273,25 @@ def cmd_publish_rules(args) -> int:
         doc = read_pdf(path, name=f"{d['id']}.pdf")
         labels = load_labels(ROOT / d["labels"])
         best = None
-        for attempt in range(1, max(1, args.attempts) + 1):
-            print(f"{d['id']}: attempt {attempt}...", file=sys.stderr, flush=True)
+        # try each model in turn, a few times each, until every labeled program passes review
+        tries = [(m, a) for m in models for a in range(1, max(1, args.attempts) + 1)]
+        for model, attempt in tries:
+            print(f"{d['id']}: {model} attempt {attempt}...", file=sys.stderr, flush=True)
             try:
                 # retries skip the cache so each attempt is a fresh answer from the model
-                run = run_extraction(doc, extractor, cache_dir=CACHE if attempt == 1 else None)
+                run = run_extraction(doc, make_extractor(model), cache_dir=CACHE if attempt == 1 else None)
             except ModelError as e:
-                print(f"  failed: {e}", file=sys.stderr)
+                print(f"  failed: {str(e)[:300]}", file=sys.stderr)
                 continue
             r = review(run.verified.products, labels)
+            for h in r.held:
+                print(f"  held {h['program']}: {h['why']} {h.get('extra', '')} {h.get('missing', '')}", file=sys.stderr)
             if best is None or len(r.published) > len(best[1].published):
                 best = (run, r, attempt)
             if not r.held:
                 break
         if best is None:
-            lines.append(f"| {d['id']} | model failed | all |")
+            lines.append(f"| {d['id']} | model failed | all | |")
             continue
         run, r, attempt = best
         if r.published:
@@ -296,7 +300,7 @@ def cmd_publish_rules(args) -> int:
             published += len(r.published)
         held = "; ".join(f"{h['program']}: {h['why']}" + (f" (extra {h['extra']}, missing {h['missing']})" if h.get("extra") or h.get("missing") else "")
                          for h in r.held)
-        lines.append(f"| {d['id']} | {', '.join(x.split(' / ')[-1] for x in r.as_dict()['published']) or 'none'} | {held or 'none'} |")
+        lines.append(f"| {d['id']} | {', '.join(x.split(' / ')[-1] for x in r.as_dict()['published']) or 'none'} | {held or 'none'} | {run.model} |")
     report = "\n".join(lines) + "\n"
     print(report)
     if args.report:
@@ -348,7 +352,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("after")
     c.set_defaults(fn=cmd_compare)
     r = sub.add_parser("publish-rules", help="extract, review against labels and save rules for the map")
-    r.add_argument("--model", default=DEFAULT_MODEL)
+    r.add_argument("--model", action="append", help="model to extract with; repeat to fall back to the next model when one fails review")
     r.add_argument("--attempts", type=int, default=3, help="re-run a document up to N times until every labeled program passes review")
     r.add_argument("--only", action="append", help="limit to these document ids")
     r.add_argument("--rules-dir", help="where to save (default data/rules)")

@@ -18,8 +18,9 @@ def extracted(fake_api, guide_pdf):
 
 def test_decision_facts():
     p = Product.model_validate(LABELS["products"][0]["product"])
+    # plain "eligible" zone rules restrict nothing, so they're left out
     assert decision_facts(p, "RI") == {"sold_in_RI:yes", "location:floodway", "location:cbrs", "zone:A:eligible_if_elevated_above_bfe",
-                                       "zone:V:eligible_if_elevated_above_bfe", "zone:B:eligible", "zone:C:eligible", "zone:X:eligible"}
+                                       "zone:V:eligible_if_elevated_above_bfe"}
     assert "sold_in_HI:no" in decision_facts(p, "HI")
 
 
@@ -72,7 +73,7 @@ def test_cli_publish_rules_saves_reviewed_programs(fake_api, guide_pdf, labels_f
     assert cli.main(["--sources", str(sources), "publish-rules", "--rules-dir", str(rules), "--report", str(report)]) == 0
     saved = json.loads((rules / "harborline.json").read_text())
     assert saved["source"]["published"] == "2026-01" and saved["review"]["published"] == ["Harborline / Harborline Private Flood"]
-    assert "| harborline | Harborline Private Flood | none |" in report.read_text()
+    assert "| harborline | Harborline Private Flood | none | claude-haiku-5-5 |" in report.read_text()
 
 
 def test_cli_publish_rules_fails_when_nothing_passes(fake_api, guide_pdf, tmp_path, monkeypatch):

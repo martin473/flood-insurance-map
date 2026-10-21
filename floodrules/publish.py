@@ -7,7 +7,7 @@ with the hand-checked labels for that document:
 
 * whether it's sold in the state
 * its location exclusions (coastal barrier, floodway, island, over water...)
-* its flood-zone conditions
+* its flood-zone conditions that restrict something (plain "eligible in zone X" is ignored)
 
 A program is published only if all three match exactly. Other differences (limits, waiting periods,
 building-level exclusions) don't change the map's answer, so they're reported but don't block.
@@ -34,7 +34,8 @@ def sold_in(p: Product, state: str) -> str:
 def decision_facts(p: Product, state: str) -> set[str]:
     out = {f"sold_in_{state}:{sold_in(p, state)}"}
     out |= {f"location:{x.kind}" for x in p.location_exclusions}
-    out |= {f"zone:{z}:{c.rule}" for c in p.zone_conditions for z in c.zones}
+    # "eligible in zone X" restricts nothing, so it can't change an answer
+    out |= {f"zone:{z}:{c.rule}" for c in p.zone_conditions for z in c.zones if c.rule != "eligible"}
     return out
 
 

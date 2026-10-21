@@ -9,10 +9,10 @@ name: rules
 on:
   workflow_dispatch:
     inputs:
-      model:
-        description: "Ollama model"
+      models:
+        description: "Ollama models to try in order, space-separated"
         required: true
-        default: "ollama:nemotron-3-nano:30b"
+        default: "ollama:gpt-oss:120b ollama:gemma4:31b ollama:nemotron-3-nano:30b"
       attempts:
         description: "Re-run a document up to this many times until all its programs pass review"
         required: true
@@ -40,13 +40,16 @@ jobs:
       - name: Extract, review and save
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
-          MODEL: ${{ inputs.model }}
+          MODELS: ${{ inputs.models }}
           ATTEMPTS: ${{ inputs.attempts }}
         run: |
           if [ -z "$OLLAMA_API_KEY" ]; then echo "::error::Add the OLLAMA_API_KEY secret."; exit 1; fi
           case "$ATTEMPTS" in ''|*[!0-9]*) echo "::error::attempts must be a number"; exit 1;; esac
           set -o pipefail
-          floodrules publish-rules --model "$MODEL" --attempts "$ATTEMPTS" --report review.md 2>&1 | tee run.log
+          floodrules models 2>&1 | tee run.log || true
+          args=""
+          for m in $MODELS; do args="$args --model $m"; done
+          floodrules publish-rules $args --attempts "$ATTEMPTS" --report review.md 2>&1 | tee -a run.log
       - name: Post the review on the run page
         if: always()
         run: |
@@ -54,13 +57,13 @@ jobs:
           # also as an annotation, which shows on the run page and through the checks API
           enc() { sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}'; }
           if test -f review.md; then echo "::notice title=Rules review::$(enc < review.md)"; fi
-          if test -f run.log; then echo "::notice title=Run log (last 40 lines)::$(tail -40 run.log | enc)"; fi
+          if test -f run.log; then echo "::notice title=Run log::$(head -c 60000 run.log | enc)"; fi
       - name: Commit the published rules
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/rules
           if git diff --cached --quiet; then echo "no changes"; exit 0; fi
-          git commit -m "Publish reviewed insurer rules (${{ inputs.model }})"
+          git commit -m "Publish reviewed insurer rules"
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
