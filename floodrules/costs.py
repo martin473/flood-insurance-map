@@ -56,8 +56,8 @@ def fetch_policies(state: str, since: date, session: requests.Session | None = N
     flt = f"propertyState eq '{state}' and policyEffectiveDate ge '{since.isoformat()}'"
     skip = 0
     while True:
-        r = s.get(FEMA_POLICIES, params={"$filter": flt, "$select": ",".join(FIELDS), "$top": page, "$skip": skip,
-                                         "$orderby": "id"}, timeout=120)
+        params: dict[str, str | int] = {"$filter": flt, "$select": ",".join(FIELDS), "$top": page, "$skip": skip, "$orderby": "id"}
+        r = s.get(FEMA_POLICIES, params=params, timeout=120)
         r.raise_for_status()
         rows = r.json().get("NfipPolicies", [])
         yield from rows
