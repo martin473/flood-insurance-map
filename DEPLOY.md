@@ -1,5 +1,23 @@
 # Deploying
 
+## On your own droplet (simplest)
+
+`deploy/droplet.sh` sets everything up under `~/portfolio-projects/flood-insurance-map` on the server: it installs Docker if needed, clones the repo, creates `deploy/.env` with a random admin token, and starts two containers. Caddy serves the map at `/` and the API at `/api`. CI runs this same setup on every push and checks the map and API through Caddy.
+
+From your Mac, in the `flood-rules` folder:
+
+```bash
+ssh root@<droplet-ip> 'bash -s' < deploy/droplet.sh
+```
+
+SSH asks for your key's passphrase as usual. When it finishes, it prints the address to open. Run the same command again to update to the latest commit.
+
+- **HTTPS:** point a domain name (e.g. `flood.sawyersweet.net`) at the droplet's IP, set `SITE_ADDRESS=flood.sawyersweet.net` in `~/portfolio-projects/flood-insurance-map/deploy/.env` on the server, and rerun the script. Caddy gets the certificate automatically.
+- **Firewall:** if the droplet uses `ufw`, allow web traffic with `ufw allow 80,443/tcp`.
+- **Not root?** Run the script with a user that can use `sudo` and Docker.
+
+## On DigitalOcean App Platform
+
 One DigitalOcean App Platform app runs both parts:
 
 - **map**: the static page at `/`, from `map/`

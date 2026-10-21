@@ -42,3 +42,23 @@ jobs:
           echo "check: JSON request log"; docker logs api 2>&1 | grep '"event": "request"'
       - if: failure()
         run: docker logs api 2>&1 || true
+
+  stack:
+    # Runs the droplet setup (deploy/docker-compose.yml: Caddy + API) and checks the map and API
+    # through Caddy, so a broken deploy is caught here instead of on the server.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the stack
+        run: |
+          printf 'SITE_ADDRESS=:80\nFLOODRULES_ADMIN_TOKEN=ci-token\n' > deploy/.env
+          docker compose -f deploy/docker-compose.yml up -d --build
+      - name: Check the map and API through Caddy
+        run: |
+          for i in $(seq 1 40); do curl -fsS localhost/api/health && break; sleep 2; done
+          echo "check: /api/health"; curl -fsS localhost/api/health | grep '"ok":true'
+          echo "check: map at /"; curl -fsS localhost/ | grep -q '<title>Rhode Island Flood Outlook</title>'
+          echo "check: map points at /api"; curl -fsS localhost/ | grep -q 'name="flood-api" content="/api"'
+          echo "check: /api/metrics"; curl -fsS localhost/api/metrics | grep -q '"fema_nfhl"'
+      - if: failure()
+        run: docker compose -f deploy/docker-compose.yml logs 2>&1 | tail -100
