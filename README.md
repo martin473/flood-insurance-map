@@ -76,6 +76,15 @@ For Ollama models the report shows latency and token counts; there's no per-toke
 
 **Results:** not run yet. This needs an API key and the downloaded PDFs; paste `evals/runs/latest.md` here after the first run.
 
+## What neighbors paid
+
+Each answer card shows what homes near the tapped spot actually paid, from published records rather than quotes:
+
+- **Flood:** median, mean and middle half of the total yearly cost of federal flood policies on single-family homes, from FEMA's [NFIP policy records](https://www.fema.gov/openfema-data-page/nfip-redacted-policies-v3). Grouped by census tract and flood zone (high-risk vs. lower-risk), falling back to the town, then the county, when a tract has fewer than 10 policies. One year of policies, so each home counts about once.
+- **Homeowners:** average premium per policy in the ZIP code, from the U.S. Treasury's 2018–2022 ZIP-level data (the latest published; [re-hosted by the Consumer Federation of America](https://consumerfed.org/news/blogs/download-analyses-of-us-homeowners-insurance-markets-2018-2022-climate-related-risks-and-other-factors-report-and-data-from-federal-insurance-office-fio/) after Treasury removed it).
+
+`floodrules costs` downloads both, summarizes them and writes `map/data/ri-costs.json` (about 18 KB). The `data` workflow runs it monthly and commits the result. It refuses to write when the download looks truncated or a field changed, so a bad pull fails the run and the map keeps the previous file. The map gets the tract and ZIP for a point from the Census Bureau's TIGERweb service.
+
 ## Design decisions
 
 - **One schema, two backends.** The Pydantic models generate one strict-mode JSON Schema. Ollama gets it as `format`, which constrains decoding; Claude gets it as a `strict` tool. Both paths go through the same validation, quote check and scoring, so results are comparable.

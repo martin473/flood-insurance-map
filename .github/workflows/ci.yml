@@ -58,6 +58,7 @@ jobs:
           echo "check: map at /"; curl -fsS localhost:8080/ | grep -q '<title>Rhode Island Flood Outlook</title>'
           echo "check: map points at /api"; curl -fsS localhost:8080/ | grep -q 'name="flood-api" content="/api"'
           echo "check: /api/metrics"; curl -fsS localhost:8080/api/metrics | grep -q '"fema_nfhl"'
+          echo "check: neighbor-cost data"; curl -fsS localhost:8080/data/ri-costs.json | grep -q '"tract"'
           echo "check: service restarts on failure"; sudo systemctl kill flood-insurance-map; sleep 6; curl -fsS localhost:8080/api/health | grep -q '"ok":true'
           echo "check: rerunning updates in place"; sudo -H env REF=${{ github.sha }} bash droplet.sh | tail -3
       - if: failure()
