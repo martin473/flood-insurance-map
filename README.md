@@ -66,6 +66,7 @@ For Ollama models the report shows latency and token counts; there's no per-toke
 
 - **One schema, two backends.** The Pydantic models generate one strict-mode JSON Schema. Ollama gets it as `format`, which constrains decoding; Claude gets it as a `strict` tool. Both paths go through the same validation, quote check and scoring, so results are comparable.
 - **Long documents go a few pages at a time.** Each document is split into chunks of consecutive pages (about 24,000 characters each for Ollama; set `FLOODRULES_CHUNK_CHARS` to change it), each chunk is its own request with its real page numbers, and the results are merged by program. Every rule is then checked against the whole document, so a rule cited on the wrong page in one chunk is still verified. Reasoning models are run with thinking turned off, since hidden thinking tokens otherwise eat the answer's token budget.
+- **Repair, then validate item by item.** Endpoints that don't enforce the schema get near-misses (zone `AE` for `A`, limit `building` for `dwelling`, state names for codes). `repair.py` maps known variants, then validates each rule separately and drops only the ones that still don't fit. Drops are listed in the eval report, so a model that writes sloppy JSON loses those rules, not the whole document.
 - **No silent truncation.** A local Ollama drops the start of prompts longer than its context window without an error, so the client sizes `num_ctx` to the document. On any host, if the reported prompt tokens are far fewer than the document needs, the call fails loudly instead of scoring a model that never saw part of the guide.
 - **`format` with a fallback.** Ollama's cloud docs don't say whether every endpoint and model honors `format`. If a request is rejected because of it, the client retries with the schema only in the prompt. The reply still has to parse and validate against the schema.
 - **Strict tool with `tool_choice: auto` (Claude).** Claude Sonnet 5.5 and Opus 5.5 reject a forced `tool_choice`, so the tool is marked `strict` (inputs must match the schema) and the system prompt says to call it. A reply without the tool call raises an error instead of being parsed.
@@ -76,7 +77,7 @@ For Ollama models the report shows latency and token counts; there's no per-toke
 
 ## Tests
 
-`pytest`: 87 tests covering schema export, PDF parsing, the quote verifier, both model clients (auth, host selection, `format` fallback, retries and truncation for Ollama; retries and cost math for Claude), extraction end to end against a fake API, the scorer, the CLI, the rules store, and the coverage engine on five Rhode Island spots whose facts were pulled from FEMA and USFWS on 2026-10-21. Fixtures use a made-up insurer guide rendered to a real PDF, including one invented rule the verifier has to catch.
+`pytest`: 93 tests covering schema export, PDF parsing, the quote verifier, both model clients (auth, host selection, `format` fallback, retries and truncation for Ollama; retries and cost math for Claude), extraction end to end against a fake API, the scorer, the CLI, the rules store, and the coverage engine on five Rhode Island spots whose facts were pulled from FEMA and USFWS on 2026-10-21. Fixtures use a made-up insurer guide rendered to a real PDF, including one invented rule the verifier has to catch.
 
 ## Limitations
 

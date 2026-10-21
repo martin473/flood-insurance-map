@@ -4,7 +4,6 @@ import json
 import pytest
 
 from floodrules import cli
-from floodrules.claude import ModelError
 from floodrules.extract import INSTRUCTION, SYSTEM, OllamaExtractor, ReplayExtractor, make_extractor, run_extraction
 from floodrules.ollama import CLOUD_HOST, LOCAL_HOST, MAX_CTX, MAX_OUTPUT_TOKENS, Ollama, OllamaError, context_size
 from floodrules.pdftext import read_pdf
@@ -144,8 +143,8 @@ def test_output_cut_off_is_reported(guide_pdf):
 def test_invalid_json_and_schema_violations(guide_pdf):
     with pytest.raises(OllamaError, match="invalid JSON"):
         run_extraction(read_pdf(guide_pdf), cloud(FakeOllama([good_reply(content="Sure! Here are the rules")])))
-    with pytest.raises(ModelError, match="didn't match the schema"):
-        run_extraction(read_pdf(guide_pdf), cloud(FakeOllama([good_reply(content='{"products": [{"insurer": "X"}]}')])))
+    run = run_extraction(read_pdf(guide_pdf), cloud(FakeOllama([good_reply(content='{"products": [{"insurer": "X"}]}')])))
+    assert run.verified.products == [] and len(run.schema_dropped) == 1
 
 
 def test_server_errors_after_retries(guide_pdf):

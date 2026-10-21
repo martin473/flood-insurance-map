@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
@@ -15,23 +15,25 @@ from .claude import Claude, ModelError, Usage
 from .merge import merge
 from .ollama import Ollama
 from .pdftext import Document
+from .repair import Dropped, repair
 from .schema_export import tool_schema
 from .schemas import Extraction
 from .verify import Verifier, VerifyReport
 
-PROMPT_VERSION = "2026-10-21.2"
+PROMPT_VERSION = "2026-10-21.3"
 
 SYSTEM = """You extract eligibility rules for private flood insurance programs from underwriting guides, \
 brochures and broker comparison sheets, for a tool that tells homeowners which insurers might cover a property.
 
 Rules:
 - Record only what the document states. Leave a field empty or null when the document is silent. Never fill gaps from general knowledge.
-- One product per private flood program. A comparison sheet can describe several. Skip the NFIP; it is not a private program.
+- One product per private residential flood program. A comparison sheet can describe several. Skip the NFIP; it is not a private program. Skip commercial-only programs; when a document covers both, record only the residential program and its rules.
 - Every rule needs evidence: an exact quote of under 25 words copied character-for-character from the document, and the page number from its <page> tag. Quotes are checked against the document and rules with quotes that don't match are discarded.
 - Availability: use all_except with the excluded states when the document says "all states except", only_listed when it lists the states where the program is sold.
 - Location exclusions are about where the building is (CBRA or Coastal Barrier zones, floodways, over water, islands, barrier islands). Property exclusions are about the building or its history (condos, manufactured or mobile homes, prior losses, severe repetitive loss, contents below grade, NFIP grandfathered rating).
-- Zone conditions describe which FEMA zones are eligible and under what condition. Map AE/AH/AO/AR/A99 to A and VE to V.
-- Limits: only fixed dollar maximums. Skip limits expressed as a percentage.
+- Zone conditions describe which FEMA zones are eligible and under what condition. Use only the letters A, V, B, C, X, D: map AE/AH/AO/AR/A99 to A, VE to V, and shaded or unshaded X to X.
+- Limits: only fixed dollar maximums, as whole numbers of dollars (1250000, not "$1.25M"). Skip limits expressed as a percentage. Kinds: dwelling (building coverage), contents (personal property), other_structures, loss_of_use (additional living expenses), total_insured_value, increased_cost_of_compliance.
+- States are two-letter postal codes.
 - If the text starts with an <excerpt> tag, it is part of a longer document. Record only what these pages state, and name each program as the pages do; results from all excerpts are merged afterwards.
 Always answer by calling the record_eligibility_rules tool exactly once."""
 
@@ -54,6 +56,7 @@ class ExtractionRun:
     usage: Usage
     cost_usd: float | None
     chunks: int = 1
+    schema_dropped: list[Dropped] = field(default_factory=list)   # items that couldn't be made to fit the schema
 
 
 class Extractor(Protocol):
@@ -132,13 +135,15 @@ def run_extraction(doc: Document, extractor: Extractor, cache_dir: str | Path | 
     size = chunk_chars or getattr(extractor, "chunk_chars", None) or 10**9
     chunks = doc.chunks(size)
     raws, parts, usage = [], [], Usage()
+    dropped: list[Dropped] = []
     for chunk in chunks:
         raw, u = extractor.tool_input(chunk)
-        where = f" (pages {chunk.first_page}-{chunk.last_page})" if len(chunks) > 1 else ""
+        fixed, d = repair(raw)
+        dropped += d
         try:
-            parts.append(Extraction.model_validate(raw))
-        except ValidationError as e:
-            raise ModelError(f"Tool input{where} didn't match the schema: {e.error_count()} errors, first: {e.errors()[0]['msg']}") from e
+            parts.append(Extraction.model_validate(fixed))
+        except ValidationError as e:   # repair() validates item by item, so this would be a bug in repair
+            raise ModelError(f"Tool input didn't match the schema: {e.error_count()} errors, first: {e.errors()[0]['msg']}") from e
         raws.append(raw)
         usage = usage.add(u)
         if cache_dir is not None and getattr(extractor, "saves_cache", False):
@@ -151,4 +156,4 @@ def run_extraction(doc: Document, extractor: Extractor, cache_dir: str | Path | 
     return ExtractionRun(document=doc.name, model=extractor.model, prompt_version=PROMPT_VERSION,
                          raw=raws[0] if len(raws) == 1 else {"chunks": raws},
                          extraction=extraction, verified=verified, report=report, usage=usage,
-                         cost_usd=usage.cost_usd(extractor.model), chunks=len(chunks))
+                         cost_usd=usage.cost_usd(extractor.model), chunks=len(chunks), schema_dropped=dropped)

@@ -99,6 +99,8 @@ def evaluate_model(model: str, sources: list[dict], replay: bool, repeat: int) -
         raw_scores.append(raw_s)
         ver_scores.append(ver_s)
         docs.append({"id": d["id"], "pages": len(doc.pages), "chunks": run.chunks, "raw": raw_s.as_dict(), "verified": ver_s.as_dict(),
+                     "schema_dropped": [x.__dict__ for x in run.schema_dropped],
+                     "format_accepted": getattr(getattr(extractor, "client", None), "used_format", None),
                      "verification": {"kept": run.report.kept, "rejected": len(run.report.rejected),
                                       "page_corrected": run.report.page_corrected,
                                       "rejections": [r.__dict__ for r in run.report.rejected]},
@@ -160,7 +162,10 @@ def render_markdown(results: list[dict]) -> str:
             v = d["verified"]
             chunked = f", {d['chunks']} chunks" if d.get("chunks", 1) > 1 else ""
             lines.append(f"- **{d['id']}** ({d['pages']} pages{chunked}): precision {pct(v['overall']['precision'])}, recall {pct(v['overall']['recall'])}; "
-                         f"{d['verification']['rejected']} rules rejected by the quote check.")
+                         f"{d['verification']['rejected']} rules rejected by the quote check, "
+                         f"{len(d.get('schema_dropped', []))} dropped for not fitting the schema.")
+            for x in d.get("schema_dropped", [])[:5]:
+                lines.append(f"  - dropped {x['field']} `{x['value']}`: {x['reason']}")
             for m in v["misses"][:8]:
                 lines.append(f"  - missed `{m}`")
             for f in v["false_positives"][:8]:
