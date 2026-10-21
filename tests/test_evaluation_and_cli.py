@@ -51,9 +51,27 @@ def test_combine_adds_counts(labels_file):
     assert t.overall.tp == 2 * a.overall.tp and t.products_expected == 2
 
 
-def test_repo_labels_parse():
-    for name in ("rt_specialty_2023", "hiscox_floodplus_2024", "msi_flood_2026"):
-        assert load_labels(cli.ROOT / "evals" / "labels" / f"{name}.json")
+def test_every_source_has_parseable_labels():
+    sources = json.loads((cli.ROOT / "evals" / "sources.json").read_text())["documents"]
+    assert len(sources) >= 8
+    ids = [d["id"] for d in sources]
+    assert len(ids) == len(set(ids))
+    for d in sources:
+        labels = load_labels(cli.ROOT / d["labels"])
+        assert labels, d["id"]
+        s = score([lab.product for lab in labels], labels)   # labels must score perfectly against themselves
+        assert s.overall.precision == 1 and s.overall.recall == 1, d["id"]
+
+
+def test_alternative_names(tmp_path):
+    p = tmp_path / "l.json"
+    p.write_text(json.dumps({"products": [{"match_any": ["quickhome", "rt specialty private flood"],
+                                           "product": {"insurer": "QuickHome", "program": "Private Flood", "availability": {"mode": "all_states"}}}]}))
+    labels = load_labels(p)
+    as_named = lambda ins, prog: labels[0].product.model_copy(update={"insurer": ins, "program": prog})  # noqa: E731
+    assert score([as_named("RT Specialty", "Private Flood Program")], labels).products_matched == 1
+    assert score([as_named("QuickHome", "Flood")], labels).products_matched == 1
+    assert score([as_named("RT Specialty", "FloodPlus")], labels).products_matched == 0
 
 
 @pytest.fixture

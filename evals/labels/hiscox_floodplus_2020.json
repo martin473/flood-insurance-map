@@ -1,0 +1,43 @@
+{
+ "document": "hiscox_floodplus_2020",
+ "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
+ "notes": "An older edition of the 2024 brochure with lower limits. It covers homeowners and commercial risks; only the homeowners program is labeled. 'Available across the USA' is labeled as all_states.",
+ "products": [
+  {
+   "match": [
+    "floodplus"
+   ],
+   "product": {
+    "insurer": "Hiscox",
+    "program": "FloodPlus",
+    "availability": {
+     "mode": "all_states"
+    },
+    "surplus_lines": true,
+    "elevation_certificate_required": false,
+    "limits": [
+     {
+      "kind": "dwelling",
+      "amount_usd": 1250000
+     },
+     {
+      "kind": "contents",
+      "amount_usd": 875000
+     },
+     {
+      "kind": "other_structures",
+      "amount_usd": 125000
+     },
+     {
+      "kind": "loss_of_use",
+      "amount_usd": 250000
+     },
+     {
+      "kind": "total_insured_value",
+      "amount_usd": 2500000
+     }
+    ]
+   }
+  }
+ ]
+}

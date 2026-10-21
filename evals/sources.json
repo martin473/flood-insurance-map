@@ -20,6 +20,41 @@
    "url": "https://resources.msimga.com/hubfs/MSI%20Flood%20QRG%202025.pdf?hsLang=en",
    "file": "data/docs/msi_flood_2026.pdf",
    "labels": "evals/labels/msi_flood_2026.json"
+  },
+  {
+   "id": "quickhome_private_flood_2026",
+   "title": "QuickHome (RT Specialty): Private Flood Program vs NFIP comparison guide",
+   "url": "https://rtspecialty.com/wp-content/uploads/2021/08/QuickHome-Flood-Coverage-Comparison-Guide.pdf",
+   "file": "data/docs/quickhome_private_flood_2026.pdf",
+   "labels": "evals/labels/quickhome_private_flood_2026.json"
+  },
+  {
+   "id": "burns_wilcox_floodplus_2025",
+   "title": "Burns & Wilcox: FloodPlus product sheet",
+   "url": "https://www.burnsandwilcox.com/Downloads/S00467.pdf",
+   "file": "data/docs/burns_wilcox_floodplus_2025.pdf",
+   "labels": "evals/labels/burns_wilcox_floodplus_2025.json"
+  },
+  {
+   "id": "rt_floodplus_vs_nfip_2022",
+   "title": "RT Specialty: FloodPlus Residential vs NFIP comparison sheet",
+   "url": "https://rtspecialty.com/wp-content/uploads/2022/12/22126-LM-FloodPlus-residential-NFIP-comparison-sheet.pdf",
+   "file": "data/docs/rt_floodplus_vs_nfip_2022.pdf",
+   "labels": "evals/labels/rt_floodplus_vs_nfip_2022.json"
+  },
+  {
+   "id": "hiscox_floodplus_2020",
+   "title": "Hiscox London Market: FloodPlus Residential & Commercial brochure (2020 edition)",
+   "url": "https://www.hiscoxlondonmarket.com/sites/londonmarket/files/2020-04/15116%20-%20LM%20-%20FloodPlus%20Residential%20%26%20Commercial%20Brochure.pdf",
+   "file": "data/docs/hiscox_floodplus_2020.pdf",
+   "labels": "evals/labels/hiscox_floodplus_2020.json"
+  },
+  {
+   "id": "msi_flood_vs_nfip",
+   "title": "MSI: MSI Flood vs NFIP flyer",
+   "url": "https://resources.msimga.com/hubfs/MSI%20Flood%20vs.%20NFIP%20Flyer.pdf?hsLang=en",
+   "file": "data/docs/msi_flood_vs_nfip.pdf",
+   "labels": "evals/labels/msi_flood_vs_nfip.json"
   }
  ]
 }

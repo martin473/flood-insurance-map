@@ -91,16 +91,20 @@ class DocScore:
 class Label:
     match: list[str]
     product: Product
+    match_any: list[list[str]] = field(default_factory=list)   # alternative names; any one matching is enough
 
 
 def load_labels(path: str | Path) -> list[Label]:
     data = json.loads(Path(path).read_text())
-    return [Label(match=[m.lower() for m in item["match"]], product=Product.model_validate(item["product"]))
+    return [Label(match=[m.lower() for m in item.get("match", [])], product=Product.model_validate(item["product"]),
+                  match_any=[alt.lower().split() for alt in item.get("match_any", [])])
             for item in data["products"]]
 
 
 def _matches(label: Label, p: Product) -> bool:
     name = f"{p.insurer} {p.program}".lower()
+    if label.match_any:
+        return any(all(w in name for w in alt) for alt in label.match_any)
     return all(m in name for m in label.match)
 
 
@@ -125,7 +129,7 @@ def score(predicted: list[Product], labels: list[Label]) -> DocScore:
 
     for lab in labels:
         idx = next((i for i, p in enumerate(predicted) if i not in used and _matches(lab, p)), None)
-        tag = " ".join(lab.match)
+        tag = " ".join(lab.match or (lab.match_any[0] if lab.match_any else ["?"]))
         if idx is None:
             tally(set(), facts(lab.product), tag)
             continue

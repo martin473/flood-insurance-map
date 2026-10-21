@@ -1,0 +1,37 @@
+{
+ "document": "msi_flood_vs_nfip",
+ "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
+ "notes": "A short comparison flyer for the same program as msi_flood_2026. The $350K figure is the NFIP column and isn't labeled.",
+ "products": [
+  {
+   "match": [
+    "msi"
+   ],
+   "product": {
+    "insurer": "MSI",
+    "program": "MSI Flood",
+    "availability": {
+     "mode": "all_except",
+     "states": [
+      "AK",
+      "HI",
+      "KY",
+      "LA"
+     ]
+    },
+    "elevation_certificate_required": false,
+    "waiting_period_days": 5,
+    "limits": [
+     {
+      "kind": "total_insured_value",
+      "amount_usd": 2500000
+     },
+     {
+      "kind": "increased_cost_of_compliance",
+      "amount_usd": 30000
+     }
+    ]
+   }
+  }
+ ]
+}

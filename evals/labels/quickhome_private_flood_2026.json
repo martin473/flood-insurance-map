@@ -1,0 +1,64 @@
+{
+ "document": "quickhome_private_flood_2026",
+ "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
+ "notes": "QuickHome is RT Specialty's platform, so either name counts. Basement contents ($15K) and 'customizable' limits aren't fixed-dollar limit kinds and aren't labeled. Rhode Island is not in the state list, which the coverage engine should turn into 'not offered'.",
+ "products": [
+  {
+   "match_any": [
+    "quickhome",
+    "rt specialty private flood",
+    "ryan specialty private flood"
+   ],
+   "product": {
+    "insurer": "QuickHome",
+    "program": "Private Flood Program",
+    "availability": {
+     "mode": "only_listed",
+     "states": [
+      "AL",
+      "AZ",
+      "DE",
+      "FL",
+      "GA",
+      "LA",
+      "MD",
+      "MI",
+      "MS",
+      "NC",
+      "NJ",
+      "NY",
+      "PA",
+      "SC",
+      "TX",
+      "VA"
+     ]
+    },
+    "location_exclusions": [
+     {
+      "kind": "over_water"
+     },
+     {
+      "kind": "floodway"
+     },
+     {
+      "kind": "cbrs"
+     }
+    ],
+    "property_exclusions": [
+     {
+      "kind": "condo"
+     },
+     {
+      "kind": "manufactured_home"
+     }
+    ],
+    "limits": [
+     {
+      "kind": "dwelling",
+      "amount_usd": 1700000
+     }
+    ]
+   }
+  }
+ ]
+}

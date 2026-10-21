@@ -1,0 +1,43 @@
+{
+ "document": "rt_floodplus_vs_nfip_2022",
+ "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
+ "notes": "The $250K/$100K dwelling and contents figures are the NFIP column, not FloodPlus, and aren't labeled. ICC is 'USD30,000 or 5% of the dwelling limit, whichever is greater'; the fixed $30K is labeled. 'Does not differentiate coverage by flood zone' is labeled as eligible in A, V, B, C and X.",
+ "products": [
+  {
+   "match": [
+    "floodplus"
+   ],
+   "product": {
+    "insurer": "Hiscox",
+    "program": "FloodPlus Residential",
+    "availability": {
+     "mode": "not_stated"
+    },
+    "surplus_lines": true,
+    "waiting_period_days": 7,
+    "zone_conditions": [
+     {
+      "zones": [
+       "A",
+       "V",
+       "B",
+       "C",
+       "X"
+      ],
+      "rule": "eligible"
+     }
+    ],
+    "limits": [
+     {
+      "kind": "total_insured_value",
+      "amount_usd": 2500000
+     },
+     {
+      "kind": "increased_cost_of_compliance",
+      "amount_usd": 30000
+     }
+    ]
+   }
+  }
+ ]
+}
