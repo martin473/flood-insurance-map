@@ -6,38 +6,49 @@
 
 Each phase closes one gap from the job-posting review: production Python, an eval harness, operating what you ship, and showing judgment when building with an agent.
 
+**Status, October 21, 2026:** everything Claude can do is done. The remaining steps need Sawyer: checking labels against the PDFs, running the eval, and deploying.
+
 ## Phase 1: Trustworthy eval numbers
 
-| Step | Owner | Done when |
+| Step | Owner | Status |
 |---|---|---|
-| A dollar limit only counts if its amount appears in its quote | Claude | Computed amounts ("20% of dwelling" written as $450K) are rejected; tested |
-| `--runs N`: repeat the eval and report mean, min and max | Claude | CLI and the CI eval workflow report a range, not one noisy number |
-| Check every label against its PDF | Sawyer + Claude | Each label file's `status` says "checked against the PDF" |
-| Rerun: 3 runs per model, at least 2 models | Sawyer (CI) | Results table in the README |
+| A dollar limit only counts if its amount appears in its quote | Claude | Done |
+| `--runs N`: repeat the eval and report mean, min and max | Claude | Done, in the CLI and the CI eval workflow |
+| Check every label against its PDF | Sawyer + Claude | **To do.** Attach the PDFs in chat and Claude checks each fact; set each label file's `status` to "checked against the PDF" |
+| Rerun: 3 runs per model, at least 2 models | Sawyer (CI) | **To do,** after the label check |
 
 ## Phase 2: A bigger eval set
 
-| Step | Owner | Done when |
+| Step | Owner | Status |
 |---|---|---|
-| Find more public underwriting guides and brochures | Claude | Candidates listed in `evals/sources.json` |
-| Label 5 to 7 more documents | Sawyer + Claude | 8 to 10 labeled documents |
-| Add ShoreOne / Neptune material if they reply | Sawyer | Included, if it's allowed to be public |
+| Find more public underwriting guides and brochures | Claude | Done: 5 added, 8 documents in `evals/sources.json` |
+| Label the new documents | Sawyer + Claude | Draft labels written; checked together with Phase 1 |
+| Add ShoreOne / Neptune material if they reply | Sawyer | Waiting on replies |
 
 ## Phase 3: Run it as a service
 
-| Step | Owner | Done when |
+| Step | Owner | Status |
 |---|---|---|
-| Move the map's FEMA, URI and USFWS lookups into the API, with timeouts, retries and caching | Claude | `GET /property?lat=&lng=` returns the three answers with sources; tested against recorded responses |
-| Structured request logs and per-source metrics | Claude | `GET /metrics` shows latency and error counts per data source |
-| Dockerfile and DigitalOcean app spec | Claude | `docker build` works; deploy steps in `DEPLOY.md` |
-| Deploy | Sawyer | Public API URL; health check green |
-| Map uses the API when configured | Claude | Map calls `/property` when given an API URL, and works standalone otherwise |
-| Extract and commit verified rules | Sawyer | `data/rules/` has the three documents' verified rules; `/coverage` uses them |
+| Move the map's FEMA, URI and USFWS lookups into the API, with timeouts, retries and caching | Claude | Done: `GET /property` |
+| Structured request logs and per-source metrics | Claude | Done: JSON request logs, `GET /metrics` |
+| Dockerfile and DigitalOcean app spec | Claude | Done. CI builds the image and checks it starts; steps in `DEPLOY.md` |
+| Map uses the API when served with it | Claude | Done; falls back to the public services when opened as a file |
+| Deploy | Sawyer | **To do:** follow `DEPLOY.md` |
+| Extract and commit verified rules | Sawyer | **To do,** after the label check: `floodrules extract data/docs/<doc>.pdf --model ollama:<model> --save` for each document, then commit `data/rules/` |
 
 ## Phase 4: Tell the story
 
-| Step | Owner | Done when |
+| Step | Owner | Status |
 |---|---|---|
-| Blog post draft | Claude | `docs/blog-draft.md` with placeholders for final numbers |
-| Final numbers, edit, publish | Sawyer | Live on sawyersweet.net/blog, linked from the README |
-| Resume line | Sawyer | Numbers filled in from Phase 1 |
+| Blog post draft | Claude | Done: `docs/blog-draft.md` |
+| Final numbers, edit, publish | Sawyer | **To do,** after Phase 1 |
+| Resume line | Sawyer | **To do,** after Phase 1 |
+
+## Sawyer's remaining steps, in order
+
+1. `git pull` in `~/flood-rules`, then `floodrules fetch` to download the 5 new PDFs.
+2. Attach all 8 PDFs from `data/docs/` in chat for the label check.
+3. Run the eval workflow (Actions > eval) with 3 runs and two models.
+4. Deploy with `DEPLOY.md`.
+5. Extract the rules, commit them, and push. The live map then uses them.
+6. Fill in the numbers in the blog draft and the resume line.
