@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -124,6 +125,23 @@ def cache_path(cache_dir: Path, doc: Document, model: str) -> Path:
     return Path(cache_dir) / f"{Path(doc.name).stem}.{safe_model}.{digest}.json"
 
 
+_COMMERCIAL = re.compile(r"\bcommercial\b", re.I)
+_RESIDENTIAL = re.compile(r"\b(residential|home|homeowners?|dwelling|personal)\b", re.I)
+
+
+def residential_only(extraction: Extraction) -> tuple[Extraction, list[Dropped]]:
+    """Drop commercial-only programs. This tool answers questions about homes, and models don't
+    reliably follow the prompt's instruction to skip them, so it's enforced in code."""
+    kept, dropped = [], []
+    for p in extraction.products:
+        name = f"{p.insurer} {p.program}"
+        if _COMMERCIAL.search(name) and not _RESIDENTIAL.search(name):
+            dropped.append(Dropped(f"{p.insurer} / {p.program}", "product", p.program, "commercial-only program; this tool covers homes"))
+        else:
+            kept.append(p)
+    return Extraction(products=kept), dropped
+
+
 def run_extraction(doc: Document, extractor: Extractor, cache_dir: str | Path | None = None,
                    chunk_chars: int | None = None) -> ExtractionRun:
     """Extract one document, a few pages at a time when it's long.
@@ -151,7 +169,8 @@ def run_extraction(doc: Document, extractor: Extractor, cache_dir: str | Path | 
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(json.dumps({"tool_input": raw, "usage": u.__dict__}, indent=1))
 
-    extraction = merge(parts)
+    extraction, filtered = residential_only(merge(parts))
+    dropped += filtered
     verified, report = Verifier(doc).check(extraction)
     return ExtractionRun(document=doc.name, model=extractor.model, prompt_version=PROMPT_VERSION,
                          raw=raws[0] if len(raws) == 1 else {"chunks": raws},

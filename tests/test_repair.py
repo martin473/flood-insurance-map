@@ -78,3 +78,31 @@ def test_run_extraction_records_drops(guide_pdf, fake_api):
     assert run.verified.products[0].limits == []
     assert run.schema_dropped[0].field == "limits"
     assert run.report.kept == 6   # everything else survived
+
+
+def test_commercial_programs_are_filtered_out(guide_pdf):
+    from floodrules.extract import residential_only
+
+    def prod(program):
+        return {"insurer": "Hiscox", "program": program, "availability": {"mode": "all_states"}}
+    ext = Extraction.model_validate({"products": [prod("FloodPlus Commercial"), prod("FloodPlus"),
+                                                  prod("FloodPlus Residential & Commercial"), prod("Commercial Home Flood")]})
+    kept, dropped = residential_only(ext)
+    assert [p.program for p in kept.products] == ["FloodPlus", "FloodPlus Residential & Commercial", "Commercial Home Flood"]
+    assert dropped[0].value == "FloodPlus Commercial"
+    assert "covers homes" in dropped[0].reason
+
+
+def test_filter_applies_on_replay(guide_pdf, tmp_path, fake_api):
+    import copy
+
+    from floodrules.claude import Claude
+    from floodrules.extract import ClaudeExtractor, ReplayExtractor
+    commercial = copy.deepcopy(TOOL_INPUT["products"][0])
+    commercial["program"] = "Harborline Commercial Flood"
+    fake_api.tool_input = {"products": [TOOL_INPUT["products"][0], commercial]}
+    doc = read_pdf(guide_pdf)
+    run_extraction(doc, ClaudeExtractor(Claude(transport=fake_api)), cache_dir=tmp_path)
+    replay = run_extraction(doc, ReplayExtractor(tmp_path, "claude-haiku-5-5"))
+    assert [p.program for p in replay.verified.products] == ["Harborline Private Flood"]
+    assert any(d.reason.startswith("commercial-only") for d in replay.schema_dropped)

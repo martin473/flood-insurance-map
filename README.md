@@ -77,7 +77,7 @@ For Ollama models the report shows latency and token counts; there's no per-toke
 
 ## Tests
 
-`pytest`: 93 tests covering schema export, PDF parsing, the quote verifier, both model clients (auth, host selection, `format` fallback, retries and truncation for Ollama; retries and cost math for Claude), extraction end to end against a fake API, the scorer, the CLI, the rules store, and the coverage engine on five Rhode Island spots whose facts were pulled from FEMA and USFWS on 2026-10-21. Fixtures use a made-up insurer guide rendered to a real PDF, including one invented rule the verifier has to catch.
+`pytest`: 95 tests covering schema export, PDF parsing, the quote verifier, both model clients (auth, host selection, `format` fallback, retries and truncation for Ollama; retries and cost math for Claude), extraction end to end against a fake API, the scorer, the CLI, the rules store, and the coverage engine on five Rhode Island spots whose facts were pulled from FEMA and USFWS on 2026-10-21. Fixtures use a made-up insurer guide rendered to a real PDF, including one invented rule the verifier has to catch.
 
 ## Limitations
 
