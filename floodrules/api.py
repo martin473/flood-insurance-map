@@ -15,6 +15,7 @@ from __future__ import annotations
 import hmac
 import json
 import logging
+import sys
 import os
 import threading
 import time
@@ -39,7 +40,7 @@ RI_BOUNDS = (40.9, 42.3, -72.2, -70.9)   # lat min/max, lng min/max
 
 log = logging.getLogger("floodrules")
 if not log.handlers:
-    _h = logging.StreamHandler()
+    _h = logging.StreamHandler(sys.stdout)   # containers collect stdout as the app log
     _h.setFormatter(logging.Formatter("%(message)s"))
     log.addHandler(_h)
     log.setLevel(logging.INFO)
