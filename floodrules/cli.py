@@ -5,6 +5,9 @@
   floodrules eval --model claude-haiku-5-5 --model claude-sonnet-5-5 [--repeat 2]
   floodrules eval --replay                  rescore saved responses offline (no API calls)
   floodrules compare runs/a.json runs/b.json
+  floodrules publish-rules --model ollama:nemotron-3-nano:30b
+                                            extract the documents marked "publish" in evals/sources.json,
+                                            review them against the labels and save what passes to data/rules
   floodrules costs                          rebuild map/data/ri-costs.json from FEMA and Treasury data
 """
 
@@ -255,6 +258,52 @@ def cmd_compare(args) -> int:
     return 0
 
 
+def cmd_publish_rules(args) -> int:
+    from .publish import review
+    docs = [d for d in _sources(Path(args.sources)) if d.get("publish") and (not args.only or d["id"] in args.only)]
+    rules_dir = Path(args.rules_dir) if args.rules_dir else store.DEFAULT_DIR
+    extractor = make_extractor(args.model)
+    lines = [f"## Rules review ({args.model})", "", "| Document | Published | Held back |", "|---|---|---|"]
+    published = 0
+    for d in docs:
+        path = ROOT / d["file"]
+        if not path.exists():
+            lines.append(f"| {d['id']} | missing PDF (run `floodrules fetch`) | |")
+            continue
+        doc = read_pdf(path, name=f"{d['id']}.pdf")
+        labels = load_labels(ROOT / d["labels"])
+        best = None
+        for attempt in range(1, max(1, args.attempts) + 1):
+            print(f"{d['id']}: attempt {attempt}...", file=sys.stderr, flush=True)
+            try:
+                # retries skip the cache so each attempt is a fresh answer from the model
+                run = run_extraction(doc, extractor, cache_dir=CACHE if attempt == 1 else None)
+            except ModelError as e:
+                print(f"  failed: {e}", file=sys.stderr)
+                continue
+            r = review(run.verified.products, labels)
+            if best is None or len(r.published) > len(best[1].published):
+                best = (run, r, attempt)
+            if not r.held:
+                break
+        if best is None:
+            lines.append(f"| {d['id']} | model failed | all |")
+            continue
+        run, r, attempt = best
+        if r.published:
+            store.save(run, d.get("url"), rules_dir=rules_dir, products=r.published, published=d.get("published"),
+                       review={**r.as_dict(), "attempt": attempt})
+            published += len(r.published)
+        held = "; ".join(f"{h['program']}: {h['why']}" + (f" (extra {h['extra']}, missing {h['missing']})" if h.get("extra") or h.get("missing") else "")
+                         for h in r.held)
+        lines.append(f"| {d['id']} | {', '.join(x.split(' / ')[-1] for x in r.as_dict()['published']) or 'none'} | {held or 'none'} |")
+    report = "\n".join(lines) + "\n"
+    print(report)
+    if args.report:
+        Path(args.report).write_text(report)
+    return 0 if published else 1
+
+
 def cmd_costs(args) -> int:
     from . import costs
     data = costs.build(state=args.state)
@@ -298,6 +347,13 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("before")
     c.add_argument("after")
     c.set_defaults(fn=cmd_compare)
+    r = sub.add_parser("publish-rules", help="extract, review against labels and save rules for the map")
+    r.add_argument("--model", default=DEFAULT_MODEL)
+    r.add_argument("--attempts", type=int, default=3, help="re-run a document up to N times until every labeled program passes review")
+    r.add_argument("--only", action="append", help="limit to these document ids")
+    r.add_argument("--rules-dir", help="where to save (default data/rules)")
+    r.add_argument("--report", help="also write the markdown summary here")
+    r.set_defaults(fn=cmd_publish_rules)
     k = sub.add_parser("costs", help="rebuild what-neighbors-paid data from FEMA and Treasury datasets")
     k.add_argument("--state", default="RI")
     k.add_argument("--out", default=str(ROOT / "map" / "data" / "ri-costs.json"))

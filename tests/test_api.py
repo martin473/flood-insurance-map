@@ -20,7 +20,7 @@ def client(tmp_path, monkeypatch):
     rules_dir = tmp_path / "rules"
     monkeypatch.setattr(store, "DEFAULT_DIR", rules_dir)
     monkeypatch.setattr(store.load_all, "__defaults__", (rules_dir,))
-    monkeypatch.setattr(store.save, "__defaults__", (None, rules_dir))
+    monkeypatch.setattr(store.save, "__defaults__", (None, rules_dir, None, None, None))
     monkeypatch.setattr(api, "make_extractor", lambda model: ClaudeExtractor(Claude(model=model, transport=FakeAPI())))
     return TestClient(api.app)
 

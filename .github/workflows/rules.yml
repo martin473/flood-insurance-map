@@ -1,0 +1,60 @@
+name: rules
+
+# Extracts insurer rules for the map from the documents marked "publish" in evals/sources.json,
+# using Ollama Cloud. Every program then goes through a review gate (floodrules/publish.py): it's only
+# published if whether it's sold in Rhode Island, its location exclusions and its flood-zone rules
+# match the hand-checked labels. What passes is committed to data/rules/ and served by the API.
+# Manual only, since it calls a model. Needs the OLLAMA_API_KEY secret (same as the eval workflow).
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Ollama model"
+        required: true
+        default: "ollama:nemotron-3-nano:30b"
+      attempts:
+        description: "Re-run a document up to this many times until all its programs pass review"
+        required: true
+        default: "3"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rules
+  cancel-in-progress: false
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - name: Download the documents
+        run: floodrules fetch
+      - name: Extract, review and save
+        env:
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          MODEL: ${{ inputs.model }}
+          ATTEMPTS: ${{ inputs.attempts }}
+        run: |
+          if [ -z "$OLLAMA_API_KEY" ]; then echo "::error::Add the OLLAMA_API_KEY secret."; exit 1; fi
+          case "$ATTEMPTS" in ''|*[!0-9]*) echo "::error::attempts must be a number"; exit 1;; esac
+          floodrules publish-rules --model "$MODEL" --attempts "$ATTEMPTS" --report review.md
+      - name: Post the review on the run page
+        if: always()
+        run: test -f review.md && cat review.md >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Commit the published rules
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/rules
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -m "Publish reviewed insurer rules (${{ inputs.model }})"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
