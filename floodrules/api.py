@@ -15,8 +15,8 @@ from __future__ import annotations
 import hmac
 import json
 import logging
-import sys
 import os
+import sys
 import threading
 import time
 import uuid
