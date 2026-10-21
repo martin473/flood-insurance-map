@@ -1,0 +1,54 @@
+# DigitalOcean App Platform spec: the map as a static site at /, the API at /api.
+# Create the app with:  doctl apps create --spec .do/app.yaml
+# Then set FLOODRULES_ADMIN_TOKEN in the dashboard (App > Settings > api > Environment variables).
+name: flood-insurance-map
+region: nyc
+
+services:
+  - name: api
+    github:
+      repo: martin473/flood-insurance-map
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    health_check:
+      http_path: /health
+    envs:
+      # DigitalOcean's load balancer appends the real client address to x-forwarded-for
+      - key: FLOODRULES_TRUST_PROXY
+        value: "1"
+      - key: FLOODRULES_RATE_LIMIT
+        value: "30"
+      - key: CORS_ORIGINS
+        value: ${APP_URL}
+      # Required on a public server: without it anyone could spend the model quota through /extract
+      - key: FLOODRULES_ADMIN_TOKEN
+        type: SECRET
+        scope: RUN_TIME
+
+static_sites:
+  - name: map
+    github:
+      repo: martin473/flood-insurance-map
+      branch: main
+      deploy_on_push: true
+    source_dir: map
+    index_document: rhode-island-flood-map.html
+    error_document: rhode-island-flood-map.html
+
+ingress:
+  rules:
+    - component:
+        name: api
+        preserve_path_prefix: false   # /api/property reaches the app as /property
+      match:
+        path:
+          prefix: /api
+    - component:
+        name: map
+      match:
+        path:
+          prefix: /

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Rhode Island Flood Outlook</title>
+<meta name="flood-api" content="/api">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -208,7 +209,8 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
     yearEl.textContent=s.yr;
     riseEl.textContent=s.ft?"seas +"+s.ft+" ft":"today's sea level";
     flood.setMosaicRule(lockRule(s.id));
-    if(last) draw();
+    if(last && last.api) apiLookup(last.lat,last.lng,last.label).catch(function(){ directLookup(last.lat,last.lng,last.label); });
+    else if(last) draw();
   }
   yr.addEventListener("input",function(){setYear(+yr.value);});
 
@@ -340,11 +342,7 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
     else if(maybe.length){ iA="Limited"; iS=nfip.st==="maybe"?"Federal insurance only if the home was built before "+(last.cbrs&&last.cbrs.fiDate||"this area was protected")+". Most private insurers won't cover it.":"Only if the home sits above the flood elevation."; iC="warn"; }
     else { iA="Hard to insure"; iS="The insurers we checked don't cover this spot."; iC="bad"; }
     if(sfha) iS+=" Lenders require it here.";
-    // the federal program runs on short-term extensions from Congress; flag when it's close to lapsing
-    var daysLeft=Math.round((new Date(NFIP_AUTH_UNTIL+"T23:59:00-05:00")-new Date())/864e5);
-    var nfipWarn = nfip.st==="no"||nfip.st==="unk" ? "" : daysLeft<0
-      ? '<p class="s warn-line">The federal program\'s authorization lapsed on '+NFIP_AUTH_LABEL+'. New federal policies can\'t be sold until Congress renews it. Private insurers are unaffected.</p>'
-      : daysLeft<=90 ? '<p class="s fine">Federal flood insurance is authorized through '+NFIP_AUTH_LABEL+'. Congress has always renewed it, but new sales pause during a lapse.</p>' : "";
+    var nfipWarn = nfipNote(nfip.st);
 
     // Q3: homeowners insurance. Always available via the state FAIR Plan (RIJRA); the question is private vs FAIR Plan.
     var SHORE_COUNTIES=["Charlestown","Exeter","Hopkinton","Narragansett","New Shoreham","North Kingstown","Richmond","South Kingstown","Westerly",
@@ -359,25 +357,41 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
     else if(last.town===undefined && failed){ hA="Couldn't check"; hC="unk"; hS="The map services didn't respond. Try again in a minute."; }
     else { hA="Yes"; hC="good"; hS="Widely available from private insurers. Homeowners insurance doesn't cover flooding, so that's a separate policy."; }
 
+    render(last.label, [fA,fS,fC], [iA,iS,iC], [hA,hS,hC], nfipWarn, chartHtml(d), whoHtml(list), "");
+  }
+
+  // the federal program runs on short-term extensions from Congress; flag when it's close to lapsing
+  function nfipNote(st){
+    var daysLeft=Math.round((new Date(NFIP_AUTH_UNTIL+"T23:59:00-05:00")-new Date())/864e5);
+    return st==="no"||st==="unk" ? "" : daysLeft<0
+      ? '<p class="s warn-line">The federal program\'s authorization lapsed on '+NFIP_AUTH_LABEL+'. New federal policies can\'t be sold until Congress renews it. Private insurers are unaffected.</p>'
+      : daysLeft<=90 ? '<p class="s fine">Federal flood insurance is authorized through '+NFIP_AUTH_LABEL+'. Congress has always renewed it, but new sales pause during a lapse.</p>' : "";
+  }
+
+  function chartHtml(d){
+    if(d.every(function(v){return v===null;})) return "";
+    var max=Math.max.apply(null,d.map(function(v){return v||0;}));
+    if(!(max>0)) return "";
+    var bars=d.map(function(v,i){var h=Math.round((v||0)/max*64);
+      return '<div class="bar"><span>'+(v===null?"–":(v?v.toFixed(1):"0"))+'</span><i style="height:'+h+'px;'+(i===cur?'':'opacity:.35')+'"></i></div>';}).join("");
+    return '<details class="more"><summary>Flood depth year by year</summary><div class="depths" style="margin-top:8px">'+bars+'</div><div class="yrs">'+
+      SCEN.map(function(x){return "<span>"+x.yr+"</span>";}).join("")+'</div></details>';
+  }
+
+  function whoHtml(list){
     var LBL={yes:"Available",maybe:"Maybe",no:"Not offered",unk:"Unknown"};
-    var who='<details class="more"><summary>Who sells it here and how to buy</summary><div class="insurers">'+
-      list.map(function(x){return '<div class="ins-row"><div><b>'+x.n+'</b><small>'+esc(x.why)+'</small>'+(x.st!=="no"&&x.how?'<div class="how">'+x.how+'</div>':'')+'</div><span class="st st-'+x.st+'">'+LBL[x.st]+'</span></div>';}).join("")+
+    return '<details class="more"><summary>Who sells it here and how to buy</summary><div class="insurers">'+
+      list.map(function(x){return '<div class="ins-row"><div><b>'+esc(x.n)+'</b><small>'+esc(x.why)+'</small>'+(x.st!=="no"&&x.how?'<div class="how">'+x.how+'</div>':'')+'</div><span class="st st-'+x.st+'">'+LBL[x.st]+'</span></div>';}).join("")+
       '</div>'+(placeAddr?'<div class="copyrow"><span>Address for quotes: <b id="qaddr">'+esc(placeAddr)+'</b></span><button type="button" id="copyaddr">Copy</button></div>':'')+
       '<p class="fine" style="margin-top:6px">Based on each insurer\'s published rules. The insurer makes the final decision on each home.</p></details>';
+  }
 
-    var chart="";
-    if(!failed && max>0){
-      var bars=d.map(function(v,i){var h=Math.round((v||0)/max*64);
-        return '<div class="bar"><span>'+(v===null?"–":(v?v.toFixed(1):"0"))+'</span><i style="height:'+h+'px;'+(i===cur?'':'opacity:.35')+'"></i></div>';}).join("");
-      chart='<details class="more"><summary>Flood depth year by year</summary><div class="depths" style="margin-top:8px">'+bars+'</div><div class="yrs">'+
-        SCEN.map(function(x){return "<span>"+x.yr+"</span>";}).join("")+'</div></details>';
-    }
-
-    report.innerHTML='<p class="label" style="margin:0">'+esc(last.label)+'</p>'+
-      '<div class="qa"><p class="q">Will it flood here?</p><p class="a a-'+fC+'">'+fA+'</p><p class="s">'+fS+'</p></div>'+
-      '<div class="qa"><p class="q">Can it get flood insurance?</p><p class="a a-'+iC+'">'+iA+'</p><p class="s">'+iS+'</p>'+nfipWarn+'</div>'+
-      '<div class="qa"><p class="q">Can it get homeowners insurance?</p><p class="a a-'+hC+'">'+hA+'</p><p class="s">'+hS+'</p></div>'+
-      chart+who;
+  function render(label, f, i, h, nfipWarn, chart, who, foot){
+    report.innerHTML='<p class="label" style="margin:0">'+esc(label)+'</p>'+
+      '<div class="qa"><p class="q">Will it flood here?</p><p class="a a-'+f[2]+'">'+esc(f[0])+'</p><p class="s">'+esc(f[1])+'</p></div>'+
+      '<div class="qa"><p class="q">Can it get flood insurance?</p><p class="a a-'+i[2]+'">'+esc(i[0])+'</p><p class="s">'+esc(i[1])+'</p>'+nfipWarn+'</div>'+
+      '<div class="qa"><p class="q">Can it get homeowners insurance?</p><p class="a a-'+h[2]+'">'+esc(h[0])+'</p><p class="s">'+esc(h[1])+'</p></div>'+
+      chart+who+foot;
     var cb=document.getElementById("copyaddr");
     if(cb) cb.addEventListener("click",function(){
       var t=document.getElementById("qaddr").textContent;
@@ -386,11 +400,59 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
     });
   }
 
+  // API mode: served together with the flood-insurance-map API, the page asks GET /api/property,
+  // which does the lookups server-side with caching and retries and records the sources behind each
+  // answer. Opened as a file or hosted on its own, it calls the public services directly instead.
+  var API=null;
+  var apiMeta=document.querySelector('meta[name="flood-api"]');
+  var apiReady=(apiMeta && apiMeta.content && /^https?:$/.test(location.protocol))
+    ? fetch(apiMeta.content+"/health").then(function(r){ if(r.ok) API=apiMeta.content; }).catch(function(){})
+    : Promise.resolve();
+  var LEVEL={good:"good",warn:"warn",bad:"bad",unknown:"unk"}, STATUS={available:"yes",maybe:"maybe",not_offered:"no"};
+
+  function howFor(name){
+    var all=insurers(null,null,""), n=name.toLowerCase();
+    var key=/nfip/.test(n)?0:/neptune/.test(n)?1:/hiscox|floodplus/.test(n)?2:/msi/.test(n)?3:/shoreone/.test(n)?4:-1;
+    return key>=0?all[key].how:"";
+  }
+
+  function apiLookup(lat,lng,label){
+    var year=cur===0?"today":SCEN[cur].yr;
+    return fetch(API+"/property?lat="+lat.toFixed(5)+"&lng="+lng.toFixed(5)+"&year="+year)
+      .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      .then(function(rep){ last={label:label,lat:lat,lng:lng,api:rep}; drawApi(); });
+  }
+
+  function drawApi(){
+    var r=last.api;
+    var list=r.insurers.map(function(d){
+      var name=d.insurer===d.program||d.insurer==="NFIP"?(d.insurer==="NFIP"?"NFIP (federal program)":d.insurer):d.insurer+" "+d.program;
+      return {n:name, st:STATUS[d.status]||"unk", why:d.reasons.map(function(x){return x.text;}).join(" "), how:howFor(name)};
+    });
+    var nfip=list.filter(function(x){return /^NFIP/.test(x.n);})[0];
+    var down=r.sources.filter(function(s){return !s.ok;}).map(function(s){return s.name;});
+    var foot='<p class="fine" style="margin-top:8px">Checked '+esc(r.checked_at.replace("T"," ").replace("+00:00"," UTC"))+
+      (down.length?'. Unavailable: '+esc(down.join(", "))+'.':'.')+'</p>';
+    render(last.label, [r.will_it_flood.answer, r.will_it_flood.detail, LEVEL[r.will_it_flood.level]],
+      [r.flood_insurance.answer, r.flood_insurance.detail, LEVEL[r.flood_insurance.level]],
+      [r.homeowners_insurance.answer, r.homeowners_insurance.detail, LEVEL[r.homeowners_insurance.level]],
+      nfipNote(nfip?nfip.st:"unk"), chartHtml(r.depths.map(function(x){return x.depth_ft;})), whoHtml(list), foot);
+  }
+
   function lookup(lat,lng,label){
     if(marker) marker.setLatLng([lat,lng]);
     else marker=L.circleMarker([lat,lng],{radius:8,weight:3,color:"#14232b",fillColor:"#fff",fillOpacity:1}).addTo(map);
     label=label||(lat.toFixed(5)+", "+lng.toFixed(5));
     report.innerHTML='<p class="label" style="margin:0">'+esc(label)+'</p><div>Checking flooding and insurers…</div>';
+    if(API){
+      townOf(lat,lng);   // only for the copyable address
+      apiLookup(lat,lng,label).catch(function(){ directLookup(lat,lng,label); });   // API down: answer directly
+      return;
+    }
+    directLookup(lat,lng,label);
+  }
+
+  function directLookup(lat,lng,label){
     Promise.all([femaInfo(lat,lng),Promise.all(SCEN.map(function(s){return depth(lat,lng,s.id);})),cbrsInfo(lat,lng),townOf(lat,lng)]).then(function(r){
       last={label:label,fema:r[0],depths:r[1],cbrs:r[2],town:r[3]}; draw();
     });
@@ -415,7 +477,7 @@ input[type=range]{width:100%;margin:12px 0 4px;accent-color:var(--flood-hi)}
       .catch(function(){status.textContent="Address search is unavailable. Tap the map instead.";});
   });
 
-  lookup(41.3260,-71.7920,"Example: Misquamicut, Westerly");
+  apiReady.then(function(){ lookup(41.3260,-71.7920,"Example: Misquamicut, Westerly"); });
 })();
 </script>
 </body>

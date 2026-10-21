@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .extract import ExtractionRun
 from .schemas import Product
 
-DEFAULT_DIR = Path(__file__).resolve().parent.parent / "data" / "rules"
+# In a checkout this is <repo>/data/rules. An installed package (the Docker image) sets FLOODRULES_RULES_DIR.
+DEFAULT_DIR = Path(os.environ.get("FLOODRULES_RULES_DIR") or Path(__file__).resolve().parent.parent / "data" / "rules")
 
 
 def save(run: ExtractionRun, source_url: str | None = None, rules_dir: Path = DEFAULT_DIR) -> Path:

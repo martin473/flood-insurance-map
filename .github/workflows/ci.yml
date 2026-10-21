@@ -19,3 +19,25 @@ jobs:
       - run: ruff check floodrules tests
       - run: mypy --ignore-missing-imports floodrules
       - run: pytest --cov=floodrules --cov-report=term-missing --cov-fail-under=85
+
+  docker:
+    # Builds the deploy image and checks it starts and answers /health, so a broken Dockerfile
+    # is caught here rather than in a failed DigitalOcean deploy.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t flood-api .
+      - name: Start the container and check /health
+        run: |
+          docker run -d --name api -p 8080:8080 -e FLOODRULES_ADMIN_TOKEN=ci-token flood-api
+          for i in $(seq 1 30); do curl -fsS localhost:8080/health && break; sleep 1; done
+          curl -fsS localhost:8080/health | grep '"ok":true'
+          curl -fsS localhost:8080/metrics | grep '"fema_nfhl"'
+          # /extract must refuse a real upload without the admin token (a request with no file would
+          # fail validation with 422 before auth is checked, which proves nothing)
+          printf '%%PDF-1.4\n' > probe.pdf
+          code=$(curl -s -o /dev/null -w '%{http_code}' -F file=@probe.pdf localhost:8080/extract)
+          echo "extract without token -> $code"; test "$code" = "401"
+          docker logs api | grep '"event": "request"'
+      - if: failure()
+        run: docker logs api || true

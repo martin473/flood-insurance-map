@@ -148,6 +148,9 @@ async def extract(file: UploadFile = File(...), model: str = Form(os.environ.get
                   save: bool = Form(False), source_url: str | None = Form(None), authorization: str | None = Header(None)) -> dict:
     # Extraction spends the operator's model quota, so a deployed server sets FLOODRULES_ADMIN_TOKEN.
     token = os.environ.get("FLOODRULES_ADMIN_TOKEN")
+    if not token and os.environ.get("FLOODRULES_REQUIRE_ADMIN") == "1":
+        # The Docker image sets this, so a server deployed without a token fails closed instead of open.
+        raise HTTPException(503, "Extraction is disabled: set FLOODRULES_ADMIN_TOKEN on the server.")
     if token and not hmac.compare_digest(authorization or "", f"Bearer {token}"):
         raise HTTPException(401, "Extraction requires the admin token.")
     data = await file.read()

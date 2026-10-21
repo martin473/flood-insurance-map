@@ -111,3 +111,10 @@ def test_extract_requires_admin_token_when_set(client, guide_pdf, monkeypatch):
     assert client.post("/extract", files=files).status_code == 401
     assert client.post("/extract", files=files, headers={"authorization": "Bearer wrong"}).status_code == 401
     assert client.post("/extract", files=files, headers={"authorization": "Bearer s3cret"}).status_code == 200
+
+
+def test_extract_fails_closed_when_token_required_but_unset(client, guide_pdf, monkeypatch):
+    monkeypatch.delenv("FLOODRULES_ADMIN_TOKEN", raising=False)
+    monkeypatch.setenv("FLOODRULES_REQUIRE_ADMIN", "1")
+    r = client.post("/extract", files={"file": ("g.pdf", guide_pdf.read_bytes(), "application/pdf")})
+    assert r.status_code == 503 and "FLOODRULES_ADMIN_TOKEN" in r.json()["detail"]
