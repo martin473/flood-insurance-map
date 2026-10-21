@@ -11,6 +11,10 @@ on:
         description: "Space-separated models, e.g. ollama:nemotron-3-nano:30b ollama:gemma4:31b"
         required: true
         default: "ollama:nemotron-3-nano:30b"
+      runs:
+        description: "Times to repeat the eval; scores are reported as mean (lowest-highest)"
+        required: true
+        default: "3"
 
 permissions:
   contents: read
@@ -31,6 +35,7 @@ jobs:
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
           MODELS: ${{ inputs.models }}
+          RUNS: ${{ inputs.runs }}
         run: |
           if [ -z "$OLLAMA_API_KEY" ]; then
             echo "::error::Add an OLLAMA_API_KEY secret under Settings > Secrets and variables > Actions."
@@ -38,7 +43,8 @@ jobs:
           fi
           args=""
           for m in $MODELS; do args="$args --model $m"; done
-          floodrules eval $args
+          case "$RUNS" in ''|*[!0-9]*) echo "::error::runs must be a number"; exit 1;; esac
+          floodrules eval $args --runs "$RUNS"
       - name: Post the results on the run page
         if: always()
         run: test -f evals/runs/latest.md && cat evals/runs/latest.md >> "$GITHUB_STEP_SUMMARY" || true

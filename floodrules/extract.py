@@ -107,22 +107,25 @@ def make_extractor(model: str) -> Extractor:
 class ReplayExtractor:
     """Replays saved model outputs so evals and CI run offline and for free."""
 
-    def __init__(self, cache_dir: str | Path, model: str):
+    def __init__(self, cache_dir: str | Path, model: str, run_index: int = 1):
         self.cache_dir = Path(cache_dir)
         self.model = model
+        self.run_index = run_index
 
     def tool_input(self, doc: Document) -> tuple[dict, Usage]:
-        path = cache_path(self.cache_dir, doc, self.model)
+        path = cache_path(self.cache_dir, doc, self.model, self.run_index)
         if not path.exists():
-            raise FileNotFoundError(f"No saved response for {doc.name} with {self.model}. Run once with the live API first.")
+            run = f" (run {self.run_index})" if self.run_index > 1 else ""
+            raise FileNotFoundError(f"No saved response for {doc.name}{run} with {self.model}. Run once with the live API first.")
         saved = json.loads(path.read_text())
         return saved["tool_input"], Usage(**saved["usage"])
 
 
-def cache_path(cache_dir: Path, doc: Document, model: str) -> Path:
+def cache_path(cache_dir: Path, doc: Document, model: str, run_index: int = 1) -> Path:
     digest = hashlib.sha256((doc.tagged() + PROMPT_VERSION).encode()).hexdigest()[:12]
     safe_model = model.replace(":", "_").replace("/", "_")   # ollama:qwen2.5:14b -> ollama_qwen2.5_14b
-    return Path(cache_dir) / f"{Path(doc.name).stem}.{safe_model}.{digest}.json"
+    run = f".run{run_index}" if run_index > 1 else ""        # repeated eval runs keep separate answers
+    return Path(cache_dir) / f"{Path(doc.name).stem}.{safe_model}.{digest}{run}.json"
 
 
 _COMMERCIAL = re.compile(r"\bcommercial\b", re.I)
@@ -165,7 +168,7 @@ def run_extraction(doc: Document, extractor: Extractor, cache_dir: str | Path | 
         raws.append(raw)
         usage = usage.add(u)
         if cache_dir is not None and getattr(extractor, "saves_cache", False):
-            p = cache_path(Path(cache_dir), chunk, extractor.model)
+            p = cache_path(Path(cache_dir), chunk, extractor.model, getattr(extractor, "run_index", 1))
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(json.dumps({"tool_input": raw, "usage": u.__dict__}, indent=1))
 

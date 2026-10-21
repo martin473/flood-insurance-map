@@ -15,6 +15,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import requests
 
@@ -71,8 +72,9 @@ def cmd_extract(args) -> int:
     return 0
 
 
-def evaluate_model(model: str, sources: list[dict], replay: bool, repeat: int) -> dict:
-    extractor = ReplayExtractor(CACHE, model) if replay else make_extractor(model)
+def evaluate_model(model: str, sources: list[dict], replay: bool, repeat: int, run_index: int = 1) -> dict:
+    extractor: Any = ReplayExtractor(CACHE, model, run_index) if replay else make_extractor(model)
+    extractor.run_index = run_index
     raw_scores, ver_scores, docs = [], [], []
     for d in sources:
         path = ROOT / d["file"]
@@ -80,7 +82,8 @@ def evaluate_model(model: str, sources: list[dict], replay: bool, repeat: int) -
             docs.append({"id": d["id"], "skipped": f"missing {d['file']} (run `floodrules fetch`)"})
             continue
         doc = read_pdf(path, name=f"{d['id']}.pdf")
-        print(f"{model}: {d['id']} ({len(doc.pages)} pages)...", file=sys.stderr, flush=True)
+        run_note = f" run {run_index}" if run_index > 1 else ""
+        print(f"{model}{run_note}: {d['id']} ({len(doc.pages)} pages)...", file=sys.stderr, flush=True)
         labels = load_labels(ROOT / d["labels"])
         attempts = []
         try:
@@ -123,6 +126,31 @@ def evaluate_model(model: str, sources: list[dict], replay: bool, repeat: int) -
     }
 
 
+METRICS = [("raw", "precision"), ("raw", "recall"), ("raw", "f1"), ("verified", "precision"), ("verified", "recall"), ("verified", "f1")]
+
+
+def evaluate_runs(model: str, sources: list[dict], replay: bool, repeat: int, runs: int) -> dict:
+    """Run the whole eval `runs` times. Cloud models don't answer identically even at temperature 0,
+    so one run's score can be off by several points; the mean and range are what to compare."""
+    results = [evaluate_model(model, sources, replay, repeat, run_index=i) for i in range(1, max(1, runs) + 1)]
+    first = results[0]
+    summary = {}
+    for kind, metric in METRICS:
+        values = [r["totals"][kind]["overall"][metric] for r in results if r["totals"][kind]["overall"][metric] is not None]
+        summary[f"{kind}_{metric}"] = ({"mean": round(sum(values) / len(values), 3), "min": min(values), "max": max(values)}
+                                       if values else None)
+    return {**first, "runs": len(results), "summary": summary, "per_run": [r["totals"] for r in results],
+            "per_run_latency_s": [r["cost"]["first_run"]["latency_s"] for r in results]}
+
+
+def _span(s: dict | None, runs: int) -> str:
+    if not s:
+        return "n/a"
+    if runs == 1 or s["min"] == s["max"]:
+        return f"{s['mean']:.0%}"
+    return f"{s['mean']:.0%} ({s['min']:.0%}–{s['max']:.0%})"
+
+
 def _pct(x: float | None) -> str:
     return "n/a" if x is None else f"{x:.0%}"
 
@@ -135,8 +163,21 @@ def _cost(c: dict | None, model: str = "") -> str:
 
 def render_markdown(results: list[dict]) -> str:
     pct = _pct
+    runs = max(r.get("runs", 1) for r in results)
     lines = ["# Extraction eval", "", f"Prompt version `{results[0]['prompt_version']}`. "
-             "Scores are over atomic facts. *Verified* drops rules whose quote isn't in the document.", "",
+             "Scores are over atomic facts. *Verified* drops rules whose quote isn't in the document.", ""]
+    if runs > 1:
+        lines += [f"## Summary: mean (lowest–highest) over {runs} runs", "",
+                  "| Model | Precision | Recall | F1 | Precision (verified) | Recall (verified) | F1 (verified) | Latency per run |",
+                  "|---|---|---|---|---|---|---|---|"]
+        for r in results:
+            s, n = r.get("summary", {}), r.get("runs", 1)
+            lat = r.get("per_run_latency_s", [])
+            lat_txt = f"{sum(lat) / len(lat):.1f}s" if lat else "n/a"
+            lines.append(f"| {r['model']}{' (replay)' if r['replay'] else ''} | " +
+                         " | ".join(_span(s.get(f"{k}_{m}"), n) for k, m in METRICS) + f" | {lat_txt} |")
+        lines += ["", "Details below are from run 1.", ""]
+    lines += [
              "| Model | Precision | Recall | F1 | Precision (verified) | Recall (verified) | Products found | Cost, first run | Cost, cached rerun | Latency |",
              "|---|---|---|---|---|---|---|---|---|---|"]
     for r in results:
@@ -177,10 +218,14 @@ def cmd_eval(args) -> int:
     sources = _sources(Path(args.sources))
     if args.only:
         sources = [s for s in sources if s["id"] in args.only]
-    results = [evaluate_model(m, sources, args.replay, args.repeat) for m in (args.model or [DEFAULT_MODEL])]
+    results = [evaluate_runs(m, sources, args.replay, args.repeat, args.runs) for m in (args.model or [DEFAULT_MODEL])]
     RUNS.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = RUNS / f"{stamp}.json"
+    n = 2
+    while out.exists():   # two evals in the same second
+        out = RUNS / f"{stamp}-{n}.json"
+        n += 1
     out.write_text(json.dumps(results, indent=1))
     md = render_markdown(results)
     (RUNS / "latest.md").write_text(md)
@@ -197,8 +242,14 @@ def cmd_compare(args) -> int:
             return "n/a"
         return f"{x[k]:.2f} -> {y[k]:.2f} ({y[k] - x[k]:+.2f})"
 
+    def headline(r: dict) -> dict:
+        s = r.get("summary") or {}
+        if s.get("verified_precision"):   # compare means when the runs were repeated
+            return {m: (s.get(f"verified_{m}") or {}).get("mean") for m in ("precision", "recall", "f1")}
+        return r["totals"]["verified"]["overall"]
+
     for m in sorted(set(before) & set(after)):
-        x, y = before[m]["totals"]["verified"]["overall"], after[m]["totals"]["verified"]["overall"]
+        x, y = headline(before[m]), headline(after[m])
         print(f"{m}: precision {delta(x, y, 'precision')}, recall {delta(x, y, 'recall')}, f1 {delta(x, y, 'f1')}")
     return 0
 
@@ -219,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--model", action="append", help="Claude model ID or ollama:<name>; repeat to compare models")
     v.add_argument("--replay", action="store_true", help="rescore saved responses without calling the API")
     v.add_argument("--repeat", type=int, default=1, help="run each document N times; run 2 shows the prompt-caching discount")
+    v.add_argument("--runs", type=int, default=1, help="repeat the whole eval N times and report the mean and range")
     v.add_argument("--only", action="append", help="limit to these document ids")
     v.set_defaults(fn=cmd_eval)
     c = sub.add_parser("compare", help="compare two eval runs")

@@ -58,6 +58,7 @@ curl -s localhost:8000/coverage -H 'content-type: application/json' \
 ```bash
 floodrules eval --model ollama:gemma4:31b --model ollama:<another model>   # compare models
 floodrules eval --model claude-haiku-5-5 --repeat 2                       # Claude, if you have a key
+floodrules eval --model ollama:nemotron-3-nano:30b --runs 3   # mean and range over 3 runs
 floodrules eval --replay               # rescore saved responses, no API calls
 floodrules compare evals/runs/A.json evals/runs/B.json
 ```

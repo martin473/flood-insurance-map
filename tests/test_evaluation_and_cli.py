@@ -107,3 +107,46 @@ def test_compare_runs(eval_env, capsys, tmp_path):
     capsys.readouterr()
     assert cli.main(["compare", str(run), str(run)]) == 0
     assert "precision 1.00 -> 1.00 (+0.00)" in capsys.readouterr().out
+
+
+def test_repeated_runs_report_mean_and_range(eval_env, capsys, monkeypatch):
+    import copy
+
+    from floodrules.claude import Claude
+    from floodrules.extract import ClaudeExtractor
+
+    from conftest import FakeAPI
+    root, sources, _ = eval_env
+    full = copy.deepcopy(LABELS["products"][0]["product"])
+    calls = {"n": 0}
+
+    def answer():
+        # run 2 misses the dwelling limit, so recall differs between runs
+        calls["n"] += 1
+        good = copy.deepcopy(TOOL_INPUT)
+        if calls["n"] == 2:
+            good["products"][0]["limits"] = []
+        return good
+
+    class VaryingAPI(FakeAPI):
+        def ok(self, cached=False):
+            self.tool_input = answer()
+            return super().ok(cached)
+
+    api = VaryingAPI()
+    monkeypatch.setattr(cli, "make_extractor", lambda model: ClaudeExtractor(Claude(model=model, transport=api)))
+    assert cli.main(["--sources", str(sources), "eval", "--runs", "3"]) == 0
+    out = capsys.readouterr().out
+    assert "over 3 runs" in out
+    run = json.loads(next((root / "evals" / "runs").glob("*.json")).read_text())[0]
+    rec = run["summary"]["verified_recall"]
+    assert run["runs"] == 3 and rec["min"] < rec["max"] == 1.0
+    assert rec["mean"] == round((1 + 1 + rec["min"]) / 3, 3)
+    assert len(list((root / "evals" / "cache").glob("*.json"))) == 3   # one saved answer per run
+    assert full  # labels untouched
+
+    # each run's saved answers replay separately, reproducing the same spread for free
+    capsys.readouterr()
+    assert cli.main(["--sources", str(sources), "eval", "--runs", "3", "--replay"]) == 0
+    replayed = json.loads(sorted((root / "evals" / "runs").glob("*.json"))[-1].read_text())[0]
+    assert replayed["summary"]["verified_recall"] == rec and calls["n"] == 3
