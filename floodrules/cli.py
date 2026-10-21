@@ -5,6 +5,7 @@
   floodrules eval --model claude-haiku-5-5 --model claude-sonnet-5-5 [--repeat 2]
   floodrules eval --replay                  rescore saved responses offline (no API calls)
   floodrules compare runs/a.json runs/b.json
+  floodrules costs                          rebuild map/data/ri-costs.json from FEMA and Treasury data
 """
 
 from __future__ import annotations
@@ -254,6 +255,26 @@ def cmd_compare(args) -> int:
     return 0
 
 
+def cmd_costs(args) -> int:
+    from . import costs
+    data = costs.build(state=args.state)
+    problems = costs.check(data)
+    if problems:
+        for msg in problems:
+            print(f"error: {msg}", file=sys.stderr)
+        print("not written; the existing file is unchanged", file=sys.stderr)
+        return 1
+    costs.write(data, Path(args.out))
+    f, h = data["flood"], data["homeowners"]
+    print(f"flood: {f['policies']} policies {f['window']['from']} to {f['window']['to']}, "
+          f"{len(f['tract'])} tract groups, {len(f['town'])} town groups")
+    for g, st in f["statewide"].items():
+        print(f"  statewide {g}: median ${st['median']:,}, mean ${st['mean']:,} (n={st['n']})")
+    print(f"homeowners: {len(h['zip'])} ZIPs, {h['year']}")
+    print(f"wrote {args.out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="floodrules")
     p.add_argument("--sources", default=str(ROOT / "evals" / "sources.json"))
@@ -277,6 +298,10 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("before")
     c.add_argument("after")
     c.set_defaults(fn=cmd_compare)
+    k = sub.add_parser("costs", help="rebuild what-neighbors-paid data from FEMA and Treasury datasets")
+    k.add_argument("--state", default="RI")
+    k.add_argument("--out", default=str(ROOT / "map" / "data" / "ri-costs.json"))
+    k.set_defaults(fn=cmd_costs)
     args = p.parse_args(argv)
     return args.fn(args)
 

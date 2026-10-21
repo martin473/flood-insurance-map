@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: pip install -e ".[dev]" ruff mypy
+      - run: pip install -e ".[dev,data]" ruff mypy
       - run: ruff check floodrules tests
       - run: mypy --ignore-missing-imports floodrules
       - run: pytest --cov=floodrules --cov-report=term-missing --cov-fail-under=85
