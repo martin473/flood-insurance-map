@@ -1,7 +1,7 @@
 {
  "document": "rt_floodplus_vs_nfip_2022",
- "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
- "notes": "The $250K/$100K dwelling and contents figures are the NFIP column, not FloodPlus, and aren't labeled. ICC is 'USD30,000 or 5% of the dwelling limit, whichever is greater'; the fixed $30K is labeled. 'Does not differentiate coverage by flood zone' is labeled as eligible in A, V, B, C and X.",
+ "status": "checked against the document text on 2026-10-21, using verbatim quotes pulled from each PDF",
+ "notes": "The $250K/$100K dwelling and contents figures are the NFIP column, not FloodPlus, and aren't labeled. ICC is 'USD30,000 or 5% of the dwelling limit, whichever is greater'; the fixed $30K is labeled. 'Does not differentiate coverage by flood zone' is labeled as eligible in A, V, B, C and X. Checked: the $30K figure is labeled 'Ordinance or law' in the sheet, which is the same coverage as NFIP's Increased Cost of Compliance. The sheet states no elevation-certificate rule or ineligible risks.",
  "products": [
   {
    "match": [

@@ -1,7 +1,7 @@
 {
  "document": "burns_wilcox_floodplus_2025",
- "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
- "notes": "Describes residential and commercial FloodPlus; only the residential program is labeled (the commercial one should be filtered out). 'All flood zones eligible' is labeled as eligible in A, V, B, C and X. The $3.75M replacement-cost figure and the $3.5M excess option aren't primary limits and aren't labeled. Asbestos construction and boat houses are labeled as one 'other' building exclusion.",
+ "status": "checked against the document text on 2026-10-21, using verbatim quotes pulled from each PDF",
+ "notes": "Describes residential and commercial FloodPlus; only the residential program is labeled (the commercial one should be filtered out). 'All flood zones eligible' is labeled as eligible in A, V, B, C and X. The $3.75M replacement-cost figure and the $3.5M excess option aren't primary limits and aren't labeled. Asbestos construction and boat houses are labeled as one 'other' building exclusion. Checked: no elevation certificate required and a 7-day waiting period added. The sheet doesn't say surplus lines.",
  "products": [
   {
    "match": [
@@ -53,7 +53,9 @@
       "kind": "total_insured_value",
       "amount_usd": 2250000
      }
-    ]
+    ],
+    "elevation_certificate_required": false,
+    "waiting_period_days": 7
    }
   }
  ]

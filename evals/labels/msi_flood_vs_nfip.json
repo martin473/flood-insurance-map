@@ -1,7 +1,7 @@
 {
  "document": "msi_flood_vs_nfip",
- "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
- "notes": "A short comparison flyer for the same program as msi_flood_2026. The $350K figure is the NFIP column and isn't labeled.",
+ "status": "checked against the document text on 2026-10-21, using verbatim quotes pulled from each PDF",
+ "notes": "A short comparison flyer for the same program as msi_flood_2026. The $350K figure is the NFIP column and isn't labeled. Checked: no changes.",
  "products": [
   {
    "match": [

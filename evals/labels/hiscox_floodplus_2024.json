@@ -1,19 +1,52 @@
 {
  "document": "hiscox_floodplus_2024",
- "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
- "notes": "Contents (70% of dwelling), other structures (10%) and loss of use (20%) are percentages and aren't labeled. The $3.5M excess option isn't a primary limit.",
+ "status": "checked against the document text on 2026-10-21, using verbatim quotes pulled from each PDF",
+ "notes": "Contents (70% of dwelling), other structures (10%) and loss of use (20%) are percentages and aren't labeled. The $3.5M excess option isn't a primary limit. Checked: no elevation certificate needed and a 7-day waiting period added. The brochure doesn't mention CBRA, floodways or homes over water.",
  "products": [
   {
-   "match": ["floodplus"],
+   "match": [
+    "floodplus"
+   ],
    "product": {
-    "insurer": "Hiscox", "program": "FloodPlus",
-    "availability": {"mode": "all_except", "states": ["AK", "HI"]},
+    "insurer": "Hiscox",
+    "program": "FloodPlus",
+    "availability": {
+     "mode": "all_except",
+     "states": [
+      "AK",
+      "HI"
+     ]
+    },
     "surplus_lines": true,
     "zone_conditions": [
-     {"zones": ["B", "C", "X"], "rule": "eligible_if_not_surge_exposed"},
-     {"zones": ["A", "V"], "rule": "eligible_if_elevated_above_bfe"}
+     {
+      "zones": [
+       "B",
+       "C",
+       "X"
+      ],
+      "rule": "eligible_if_not_surge_exposed"
+     },
+     {
+      "zones": [
+       "A",
+       "V"
+      ],
+      "rule": "eligible_if_elevated_above_bfe"
+     }
     ],
-    "limits": [{"kind": "dwelling", "amount_usd": 2250000}, {"kind": "total_insured_value", "amount_usd": 2500000}]
+    "limits": [
+     {
+      "kind": "dwelling",
+      "amount_usd": 2250000
+     },
+     {
+      "kind": "total_insured_value",
+      "amount_usd": 2500000
+     }
+    ],
+    "elevation_certificate_required": false,
+    "waiting_period_days": 7
    }
   }
  ]

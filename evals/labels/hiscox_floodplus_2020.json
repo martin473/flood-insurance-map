@@ -1,7 +1,7 @@
 {
  "document": "hiscox_floodplus_2020",
- "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
- "notes": "An older edition of the 2024 brochure with lower limits. It covers homeowners and commercial risks; only the homeowners program is labeled. 'Available across the USA' is labeled as all_states.",
+ "status": "checked against the document text on 2026-10-21, using verbatim quotes pulled from each PDF",
+ "notes": "An older edition of the 2024 brochure with lower limits. It covers homeowners and commercial risks; only the homeowners program is labeled. 'Available across the USA' is labeled as all_states. Checked: 7-day waiting period added.",
  "products": [
   {
    "match": [
@@ -36,7 +36,8 @@
       "kind": "total_insured_value",
       "amount_usd": 2500000
      }
-    ]
+    ],
+    "waiting_period_days": 7
    }
   }
  ]

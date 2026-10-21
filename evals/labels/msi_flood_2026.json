@@ -1,19 +1,69 @@
 {
  "document": "msi_flood_2026",
- "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
- "notes": "The $100K Coverall endorsement covers several items together, so it isn't labeled as a single limit.",
+ "status": "checked against the document text on 2026-10-21, using verbatim quotes pulled from each PDF",
+ "notes": "The $100K Coverall endorsement covers several items together, so it isn't labeled as a single limit. Checked: condominiums, mobile/manufactured homes and buildings not walled and roofed added as exclusions. 'Building & Contents Coverage: Up to $2.5M' is one combined figure, labeled as the program TIV, not as separate $2.5M dwelling and contents limits.",
  "products": [
   {
-   "match": ["msi"],
+   "match": [
+    "msi"
+   ],
    "product": {
-    "insurer": "MSI", "program": "Residential Flood Marketplace",
-    "availability": {"mode": "all_except", "states": ["AK", "HI", "KY", "LA"]},
+    "insurer": "MSI",
+    "program": "Residential Flood Marketplace",
+    "availability": {
+     "mode": "all_except",
+     "states": [
+      "AK",
+      "HI",
+      "KY",
+      "LA"
+     ]
+    },
     "elevation_certificate_required": false,
     "waiting_period_days": 5,
-    "location_exclusions": [{"kind": "over_water"}, {"kind": "cbrs"}, {"kind": "island"}, {"kind": "barrier_island"}],
-    "property_exclusions": [{"kind": "subgrade_contents", "detail": "more than 50% of contents on a subgrade floor"},
-                            {"kind": "severe_repetitive_loss"}],
-    "limits": [{"kind": "total_insured_value", "amount_usd": 2500000}, {"kind": "increased_cost_of_compliance", "amount_usd": 30000}]
+    "location_exclusions": [
+     {
+      "kind": "over_water"
+     },
+     {
+      "kind": "cbrs"
+     },
+     {
+      "kind": "island"
+     },
+     {
+      "kind": "barrier_island"
+     }
+    ],
+    "property_exclusions": [
+     {
+      "kind": "subgrade_contents",
+      "detail": "more than 50% of contents on a subgrade floor"
+     },
+     {
+      "kind": "severe_repetitive_loss"
+     },
+     {
+      "kind": "condo"
+     },
+     {
+      "kind": "manufactured_home"
+     },
+     {
+      "kind": "other",
+      "detail": "buildings not walled and roofed"
+     }
+    ],
+    "limits": [
+     {
+      "kind": "total_insured_value",
+      "amount_usd": 2500000
+     },
+     {
+      "kind": "increased_cost_of_compliance",
+      "amount_usd": 30000
+     }
+    ]
    }
   }
  ]

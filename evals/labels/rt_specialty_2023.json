@@ -1,31 +1,145 @@
 {
  "document": "rt_specialty_2023",
- "status": "draft: written from a summary of the PDF, not a line-by-line read. Check each fact against the document before trusting scores.",
- "notes": "The sheet compares FloodPlus, Neptune and the NFIP. The NFIP column is deliberately not labeled; the extractor is told to skip it. Neptune's loss-of-use limit (75% up to $20K) is a percentage rule and isn't labeled.",
+ "status": "checked against the document text on 2026-10-21, using verbatim quotes pulled from each PDF",
+ "notes": "The sheet compares FloodPlus, Neptune and the NFIP. The NFIP column is deliberately not labeled; the extractor is told to skip it. Neptune's loss-of-use limit (75% up to $20K) is a percentage rule and isn't labeled. Checked: waiting periods added (FloodPlus 7 days, Neptune 10). The sheet lists no flood-zone rules and doesn't mention barrier islands, floodways or prior losses for Neptune.",
  "products": [
   {
-   "match": ["floodplus"],
+   "match": [
+    "floodplus"
+   ],
    "product": {
-    "insurer": "Hiscox", "program": "FloodPlus",
-    "availability": {"mode": "all_except", "states": ["AK", "HI", "IL", "KY"]},
+    "insurer": "Hiscox",
+    "program": "FloodPlus",
+    "availability": {
+     "mode": "all_except",
+     "states": [
+      "AK",
+      "HI",
+      "IL",
+      "KY"
+     ]
+    },
     "elevation_certificate_required": false,
-    "location_exclusions": [{"kind": "over_water"}, {"kind": "floodway"}, {"kind": "cbrs"}],
-    "property_exclusions": [{"kind": "condo"}, {"kind": "manufactured_home"},
-                            {"kind": "prior_losses", "detail": "more than 1 loss or a single loss over $25K"}],
-    "limits": [{"kind": "dwelling", "amount_usd": 1250000}, {"kind": "contents", "amount_usd": 875000},
-               {"kind": "loss_of_use", "amount_usd": 250000}, {"kind": "other_structures", "amount_usd": 125000}]
+    "location_exclusions": [
+     {
+      "kind": "over_water"
+     },
+     {
+      "kind": "floodway"
+     },
+     {
+      "kind": "cbrs"
+     }
+    ],
+    "property_exclusions": [
+     {
+      "kind": "condo"
+     },
+     {
+      "kind": "manufactured_home"
+     },
+     {
+      "kind": "prior_losses",
+      "detail": "more than 1 loss or a single loss over $25K"
+     }
+    ],
+    "limits": [
+     {
+      "kind": "dwelling",
+      "amount_usd": 1250000
+     },
+     {
+      "kind": "contents",
+      "amount_usd": 875000
+     },
+     {
+      "kind": "loss_of_use",
+      "amount_usd": 250000
+     },
+     {
+      "kind": "other_structures",
+      "amount_usd": 125000
+     }
+    ],
+    "waiting_period_days": 7
    }
   },
   {
-   "match": ["neptune"],
+   "match": [
+    "neptune"
+   ],
    "product": {
-    "insurer": "Neptune Flood", "program": "Neptune Flood",
-    "availability": {"mode": "only_listed", "states": ["AL", "AZ", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "IN", "MA", "MD", "MI", "MO", "MS", "NC", "NH", "NJ", "NM", "NY", "OH", "OK", "OR", "PA", "RI", "SC", "TN", "TX", "VA", "WA", "WI", "WV"]},
+    "insurer": "Neptune Flood",
+    "program": "Neptune Flood",
+    "availability": {
+     "mode": "only_listed",
+     "states": [
+      "AL",
+      "AZ",
+      "CA",
+      "CO",
+      "CT",
+      "DE",
+      "FL",
+      "GA",
+      "HI",
+      "IN",
+      "MA",
+      "MD",
+      "MI",
+      "MO",
+      "MS",
+      "NC",
+      "NH",
+      "NJ",
+      "NM",
+      "NY",
+      "OH",
+      "OK",
+      "OR",
+      "PA",
+      "RI",
+      "SC",
+      "TN",
+      "TX",
+      "VA",
+      "WA",
+      "WI",
+      "WV"
+     ]
+    },
     "elevation_certificate_required": false,
-    "location_exclusions": [{"kind": "over_water"}, {"kind": "cbrs"}],
-    "property_exclusions": [{"kind": "manufactured_home"}, {"kind": "nfip_grandfathered"}],
-    "limits": [{"kind": "dwelling", "amount_usd": 4000000}, {"kind": "contents", "amount_usd": 500000},
-               {"kind": "other_structures", "amount_usd": 100000}]
+    "location_exclusions": [
+     {
+      "kind": "over_water"
+     },
+     {
+      "kind": "cbrs"
+     }
+    ],
+    "property_exclusions": [
+     {
+      "kind": "manufactured_home"
+     },
+     {
+      "kind": "nfip_grandfathered"
+     }
+    ],
+    "limits": [
+     {
+      "kind": "dwelling",
+      "amount_usd": 4000000
+     },
+     {
+      "kind": "contents",
+      "amount_usd": 500000
+     },
+     {
+      "kind": "other_structures",
+      "amount_usd": 100000
+     }
+    ],
+    "waiting_period_days": 10
    }
   }
  ]
