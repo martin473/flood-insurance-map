@@ -6,7 +6,7 @@ import pytest
 from floodrules import cli
 from floodrules.claude import ModelError
 from floodrules.extract import INSTRUCTION, SYSTEM, OllamaExtractor, ReplayExtractor, make_extractor, run_extraction
-from floodrules.ollama import CLOUD_HOST, LOCAL_HOST, MAX_CTX, Ollama, OllamaError, context_size
+from floodrules.ollama import CLOUD_HOST, LOCAL_HOST, MAX_CTX, MAX_OUTPUT_TOKENS, Ollama, OllamaError, context_size
 from floodrules.pdftext import read_pdf
 
 from conftest import TOOL_INPUT
@@ -83,8 +83,9 @@ def test_prompt_wording_was_adapted():
 
 
 def test_context_grows_with_document():
-    assert context_size(1_000) == 16384   # 8K output reservation + prompt
-    assert context_size(100_000) == 65536
+    small = context_size(1_000)
+    assert small >= 1_000 // 3 + MAX_OUTPUT_TOKENS and small & (small - 1) == 0   # room for output, power of two
+    assert context_size(100_000) > small
     assert context_size(10_000_000) == MAX_CTX
 
 
@@ -207,3 +208,56 @@ def test_eval_report_with_ollama_model(tmp_path, monkeypatch, guide_pdf, capsys)
     assert cli.main(["--sources", str(sources), "eval", "--model", "ollama:gemma4:31b"]) == 0
     out = capsys.readouterr().out
     assert "| ollama:gemma4:31b |" in out and "no per-token cost" in out and "41.5s" in out
+
+
+def test_thinking_is_turned_off(guide_pdf):
+    fake = FakeOllama()
+    ext = cloud(fake)
+    run_extraction(read_pdf(guide_pdf), ext)
+    assert fake.calls[0]["body"]["think"] is False and ext.client.used_think_off is True
+
+
+def test_models_without_think_support_fall_back(guide_pdf):
+    fake = FakeOllama([(400, {"error": '"gemma4:31b" does not support thinking'}, {})])
+    ext = cloud(fake)
+    run = run_extraction(read_pdf(guide_pdf), ext)
+    assert "think" in fake.calls[0]["body"] and "think" not in fake.calls[1]["body"]
+    assert "format" in fake.calls[1]["body"]          # only the rejected field is dropped
+    assert ext.client.used_think_off is False and run.report.kept == 7
+
+
+def test_both_fields_rejected_one_after_another(guide_pdf):
+    fake = FakeOllama([(400, {"error": "think not supported"}, {}), (400, {"error": "format not supported"}, {})])
+    run_extraction(read_pdf(guide_pdf), cloud(fake))
+    assert len(fake.calls) == 3 and not {"think", "format"} & set(fake.calls[2]["body"])
+
+
+def test_length_error_explains_thinking(guide_pdf):
+    reply = (200, {"message": {"content": "", "thinking": "Let me consider each page... " * 3000},
+                   "done_reason": "length", "prompt_eval_count": 3000}, {})
+    with pytest.raises(OllamaError, match="tokens thinking"):
+        run_extraction(read_pdf(guide_pdf), cloud(FakeOllama([reply])))
+
+
+def test_eval_continues_past_a_failed_document(tmp_path, monkeypatch, guide_pdf, capsys):
+    from conftest import LABELS
+    (tmp_path / "data" / "docs").mkdir(parents=True)
+    (tmp_path / "evals" / "labels").mkdir(parents=True)
+    for name in ("a", "b"):
+        (tmp_path / "data" / "docs" / f"{name}.pdf").write_bytes(guide_pdf.read_bytes())
+    (tmp_path / "evals" / "labels" / "h.json").write_text(json.dumps(LABELS))
+    sources = tmp_path / "sources.json"
+    sources.write_text(json.dumps({"documents": [
+        {"id": n, "url": "u", "file": f"data/docs/{n}.pdf", "labels": "evals/labels/h.json"} for n in ("a", "b")]}))
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    monkeypatch.setattr(cli, "CACHE", tmp_path / "cache")
+    monkeypatch.setattr(cli, "RUNS", tmp_path / "runs")
+    cut = (200, {"message": {"content": '{"products": ['}, "done_reason": "length", "prompt_eval_count": 3000}, {})
+    fake = FakeOllama([cut])   # first document fails, second succeeds
+    monkeypatch.setattr(cli, "make_extractor", lambda m: OllamaExtractor(Ollama(m.split(":", 1)[1], api_key="k", transport=fake)))
+    assert cli.main(["--sources", str(sources), "eval", "--model", "ollama:gemma4:31b"]) == 0
+    captured = capsys.readouterr()
+    assert "a: failed" in captured.err and "**a** (2 pages): failed" in captured.out
+    run = json.loads(next((tmp_path / "runs").glob("*.json")).read_text())[0]
+    assert run["documents"][1]["verified"]["overall"]["recall"] == 1.0
+    assert run["totals"]["verified"]["overall"]["recall"] == 0.5   # the failure counts as misses

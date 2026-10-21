@@ -19,7 +19,7 @@ from pathlib import Path
 import requests
 
 from . import store
-from .claude import Usage
+from .claude import ModelError, Usage
 from .evaluation import CATEGORIES, combine, load_labels, score
 from .extract import PROMPT_VERSION, ReplayExtractor, make_extractor, run_extraction
 from .pdftext import read_pdf
@@ -80,15 +80,25 @@ def evaluate_model(model: str, sources: list[dict], replay: bool, repeat: int) -
             docs.append({"id": d["id"], "skipped": f"missing {d['file']} (run `floodrules fetch`)"})
             continue
         doc = read_pdf(path, name=f"{d['id']}.pdf")
+        print(f"{model}: {d['id']} ({len(doc.pages)} pages)...", file=sys.stderr, flush=True)
         labels = load_labels(ROOT / d["labels"])
         attempts = []
-        for i in range(max(1, repeat)):
-            run = run_extraction(doc, extractor, cache_dir=None if replay else CACHE)
-            attempts.append({"attempt": i + 1, "usage": run.usage.__dict__, "cost_usd": run.cost_usd})
+        try:
+            for i in range(max(1, repeat)):
+                run = run_extraction(doc, extractor, cache_dir=None if replay else CACHE)
+                attempts.append({"attempt": i + 1, "usage": run.usage.__dict__, "cost_usd": run.cost_usd})
+        except (ModelError, FileNotFoundError) as e:
+            # A failed document scores as all misses rather than stopping the whole eval.
+            print(f"  {d['id']}: failed: {e}", file=sys.stderr)
+            empty = score([], labels)
+            raw_scores.append(empty)
+            ver_scores.append(empty)
+            docs.append({"id": d["id"], "pages": len(doc.pages), "error": str(e), "raw": empty.as_dict(), "verified": empty.as_dict()})
+            continue
         raw_s, ver_s = score(run.extraction.products, labels), score(run.verified.products, labels)
         raw_scores.append(raw_s)
         ver_scores.append(ver_s)
-        docs.append({"id": d["id"], "pages": len(doc.pages), "raw": raw_s.as_dict(), "verified": ver_s.as_dict(),
+        docs.append({"id": d["id"], "pages": len(doc.pages), "chunks": run.chunks, "raw": raw_s.as_dict(), "verified": ver_s.as_dict(),
                      "verification": {"kept": run.report.kept, "rejected": len(run.report.rejected),
                                       "page_corrected": run.report.page_corrected,
                                       "rejections": [r.__dict__ for r in run.report.rejected]},
@@ -144,8 +154,12 @@ def render_markdown(results: list[dict]) -> str:
             if "skipped" in d:
                 lines.append(f"- **{d['id']}**: skipped, {d['skipped']}")
                 continue
+            if "error" in d:
+                lines.append(f"- **{d['id']}** ({d['pages']} pages): failed, scored as all misses. {d['error']}")
+                continue
             v = d["verified"]
-            lines.append(f"- **{d['id']}** ({d['pages']} pages): precision {pct(v['overall']['precision'])}, recall {pct(v['overall']['recall'])}; "
+            chunked = f", {d['chunks']} chunks" if d.get("chunks", 1) > 1 else ""
+            lines.append(f"- **{d['id']}** ({d['pages']} pages{chunked}): precision {pct(v['overall']['precision'])}, recall {pct(v['overall']['recall'])}; "
                          f"{d['verification']['rejected']} rules rejected by the quote check.")
             for m in v["misses"][:8]:
                 lines.append(f"  - missed `{m}`")

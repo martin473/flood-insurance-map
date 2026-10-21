@@ -27,7 +27,7 @@ from .claude import ModelError, Usage
 CLOUD_HOST = "https://ollama.com"
 LOCAL_HOST = "http://localhost:11434"
 MAX_CTX = 131_072
-MAX_OUTPUT_TOKENS = 8192
+MAX_OUTPUT_TOKENS = int(os.environ.get("FLOODRULES_MAX_OUTPUT_TOKENS", "16384"))
 MAX_CHARS_PER_TOKEN = 8.0   # above this many chars per counted token, part of the prompt wasn't read
 
 Transport = Callable[[str, str, dict[str, Any] | None, dict[str, str]], tuple[int, dict[str, Any], dict[str, str]]]
@@ -71,6 +71,7 @@ class Ollama:
         self.max_retries = max_retries
         self.sleep = sleep
         self.used_format: bool | None = None   # False if the endpoint rejected `format`
+        self.used_think_off: bool | None = None   # False if the model doesn't accept `think`
 
     @property
     def is_cloud(self) -> bool:
@@ -116,21 +117,29 @@ class Ollama:
         if not self.is_cloud:
             num_ctx = self.num_ctx or context_size(prompt_chars)
             options["num_ctx"] = num_ctx
+        # Reasoning models (e.g. Nemotron, gpt-oss, DeepSeek-R1) spend output tokens on hidden thinking,
+        # which can exhaust the budget before the JSON is written. Extraction doesn't need it, so turn it off.
         body: dict[str, Any] = {
             "model": self.model,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "stream": False, "format": schema, "options": options,
+            "stream": False, "format": schema, "think": False, "options": options,
         }
-        try:
-            data = self._send("POST", "/api/chat", body)
-            self.used_format = True
-        except _StatusError as e:
-            if e.status == 400 and "format" in e.message.lower():
-                body.pop("format")
-                data = self._send("POST", "/api/chat", body)   # schema is still in the prompt and validated after
-                self.used_format = False
-            else:
-                raise OllamaError(f"Ollama error {e.status}: {e.message}") from None
+        # If the endpoint or model rejects a field, drop it and retry. The reply is still parsed and
+        # schema-validated afterwards, so a fallback can't let a malformed answer through.
+        while True:
+            try:
+                data = self._send("POST", "/api/chat", body)
+                break
+            except _StatusError as e:
+                msg = e.message.lower()
+                if e.status == 400 and "think" in msg and "think" in body:
+                    body.pop("think")
+                elif e.status == 400 and "format" in msg and "format" in body:
+                    body.pop("format")
+                else:
+                    raise OllamaError(f"Ollama error {e.status}: {e.message}") from None
+        self.used_format = "format" in body
+        self.used_think_off = "think" in body
 
         prompt_tokens = data.get("prompt_eval_count", 0) or 0
         if num_ctx is not None and prompt_tokens >= num_ctx - 16:
@@ -139,12 +148,17 @@ class Ollama:
         if prompt_tokens and prompt_chars / prompt_tokens > MAX_CHARS_PER_TOKEN:
             raise OllamaError(f"Only {prompt_tokens} prompt tokens were read for a {prompt_chars:,}-character prompt, so the "
                               "document was probably truncated. Use a model with a longer context window.")
+        message = data.get("message") or {}
         if data.get("done_reason") == "length":
-            raise OllamaError(f"Output hit the {MAX_OUTPUT_TOKENS}-token limit before the JSON was finished.")
+            thinking = len(message.get("thinking") or "")
+            why = (f" The model spent about {thinking // 4:,} tokens thinking before answering; it may not support turning thinking off."
+                   if thinking else " The output may be repeating itself; the end of it was: " + repr((message.get("content") or "")[-120:]))
+            raise OllamaError(f"Output hit the {MAX_OUTPUT_TOKENS:,}-token limit before the JSON was finished.{why} "
+                              "Raise FLOODRULES_MAX_OUTPUT_TOKENS or try another model.")
 
         usage = Usage(input_tokens=prompt_tokens, output_tokens=data.get("eval_count", 0) or 0,
                       latency_s=round((data.get("total_duration", 0) or 0) / 1e9, 3), calls=1)
-        content = (data.get("message") or {}).get("content", "").strip()
+        content = (message.get("content") or "").strip()
         if content.startswith("```"):   # without `format`, some models wrap JSON in a code fence
             content = content.strip("`").removeprefix("json").strip()
         try:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -11,13 +12,14 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from .claude import Claude, ModelError, Usage
+from .merge import merge
 from .ollama import Ollama
 from .pdftext import Document
 from .schema_export import tool_schema
 from .schemas import Extraction
 from .verify import Verifier, VerifyReport
 
-PROMPT_VERSION = "2026-10-21.1"
+PROMPT_VERSION = "2026-10-21.2"
 
 SYSTEM = """You extract eligibility rules for private flood insurance programs from underwriting guides, \
 brochures and broker comparison sheets, for a tool that tells homeowners which insurers might cover a property.
@@ -30,6 +32,7 @@ Rules:
 - Location exclusions are about where the building is (CBRA or Coastal Barrier zones, floodways, over water, islands, barrier islands). Property exclusions are about the building or its history (condos, manufactured or mobile homes, prior losses, severe repetitive loss, contents below grade, NFIP grandfathered rating).
 - Zone conditions describe which FEMA zones are eligible and under what condition. Map AE/AH/AO/AR/A99 to A and VE to V.
 - Limits: only fixed dollar maximums. Skip limits expressed as a percentage.
+- If the text starts with an <excerpt> tag, it is part of a longer document. Record only what these pages state, and name each program as the pages do; results from all excerpts are merged afterwards.
 Always answer by calling the record_eligibility_rules tool exactly once."""
 
 INSTRUCTION = "Extract the eligibility rules for every private flood program in the document above by calling record_eligibility_rules."
@@ -50,6 +53,7 @@ class ExtractionRun:
     report: VerifyReport
     usage: Usage
     cost_usd: float | None
+    chunks: int = 1
 
 
 class Extractor(Protocol):
@@ -60,6 +64,7 @@ class Extractor(Protocol):
 
 class ClaudeExtractor:
     saves_cache = True
+    chunk_chars = int(os.environ.get("FLOODRULES_CHUNK_CHARS", "400000"))   # Claude reads whole guides in one call
 
     def __init__(self, client: Claude):
         self.client = client
@@ -72,9 +77,11 @@ class ClaudeExtractor:
 
 
 class OllamaExtractor:
-    """Local model via Ollama. Model names carry an `ollama:` prefix, e.g. `ollama:qwen2.5:14b`."""
+    """Ollama Cloud or local model. Model names carry an `ollama:` prefix, e.g. `ollama:gemma4:31b`."""
 
     saves_cache = True
+    # About 6-8K tokens of text per request keeps both the prompt and the JSON answer well inside limits.
+    chunk_chars = int(os.environ.get("FLOODRULES_CHUNK_CHARS", "24000"))
 
     def __init__(self, client: Ollama):
         self.client = client
@@ -114,18 +121,34 @@ def cache_path(cache_dir: Path, doc: Document, model: str) -> Path:
     return Path(cache_dir) / f"{Path(doc.name).stem}.{safe_model}.{digest}.json"
 
 
-def run_extraction(doc: Document, extractor: Extractor, cache_dir: str | Path | None = None) -> ExtractionRun:
-    raw, usage = extractor.tool_input(doc)
-    try:
-        extraction = Extraction.model_validate(raw)
-    except ValidationError as e:
-        raise ModelError(f"Tool input didn't match the schema: {e.error_count()} errors, first: {e.errors()[0]['msg']}") from e
+def run_extraction(doc: Document, extractor: Extractor, cache_dir: str | Path | None = None,
+                   chunk_chars: int | None = None) -> ExtractionRun:
+    """Extract one document, a few pages at a time when it's long.
 
+    Each chunk is its own request (and its own cache entry), so a long guide can't overflow
+    the context window or the answer's token budget. Chunk results are merged, then every
+    rule is checked against the full document.
+    """
+    size = chunk_chars or getattr(extractor, "chunk_chars", None) or 10**9
+    chunks = doc.chunks(size)
+    raws, parts, usage = [], [], Usage()
+    for chunk in chunks:
+        raw, u = extractor.tool_input(chunk)
+        where = f" (pages {chunk.first_page}-{chunk.last_page})" if len(chunks) > 1 else ""
+        try:
+            parts.append(Extraction.model_validate(raw))
+        except ValidationError as e:
+            raise ModelError(f"Tool input{where} didn't match the schema: {e.error_count()} errors, first: {e.errors()[0]['msg']}") from e
+        raws.append(raw)
+        usage = usage.add(u)
+        if cache_dir is not None and getattr(extractor, "saves_cache", False):
+            p = cache_path(Path(cache_dir), chunk, extractor.model)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps({"tool_input": raw, "usage": u.__dict__}, indent=1))
+
+    extraction = merge(parts)
     verified, report = Verifier(doc).check(extraction)
-    if cache_dir is not None and getattr(extractor, "saves_cache", False):
-        p = cache_path(Path(cache_dir), doc, extractor.model)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({"tool_input": raw, "usage": usage.__dict__}, indent=1))
-    return ExtractionRun(document=doc.name, model=extractor.model, prompt_version=PROMPT_VERSION, raw=raw,
+    return ExtractionRun(document=doc.name, model=extractor.model, prompt_version=PROMPT_VERSION,
+                         raw=raws[0] if len(raws) == 1 else {"chunks": raws},
                          extraction=extraction, verified=verified, report=report, usage=usage,
-                         cost_usd=usage.cost_usd(extractor.model))
+                         cost_usd=usage.cost_usd(extractor.model), chunks=len(chunks))
