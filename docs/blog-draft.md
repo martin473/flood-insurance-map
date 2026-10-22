@@ -1,6 +1,6 @@
 # Will it flood, and can I insure it? Building a flood map with an AI agent
 
-*Draft. Numbers in [brackets] get filled in after the labels are checked and the final eval runs.*
+*Draft. Eval numbers are from [one GitHub Actions run](https://github.com/martin473/flood-insurance-map/actions/runs/39703488854), October 21, 2026.*
 
 I wanted a map for Rhode Island homeowners: projected flooding on top of the flood insurance maps. I built it with an AI coding agent over a day and a half. This post is about the decisions, because the agent wrote most of the code and the interesting part was deciding what to keep.
 
@@ -38,22 +38,22 @@ That got verified recall to **90%** and precision to **79%**.
 
 **The model did math.** A brochure says loss of use is 20% of the dwelling limit. The model wrote "$450,000," which is 20% of $2.25M. The rule passed the quote check because "20% of dwelling" really is in the document. The fix was a second check: a dollar limit only counts if the amount appears in its quote.
 
-**The same run doesn't give the same score.** The same model, prompt and documents scored 90% recall on my laptop and 81% in CI, even at temperature 0. A single eval number from a cloud model can be off by about 10 points, so the eval now repeats each run and reports a mean and range: **[X]% precision and [Y]% recall, mean of 3 runs ([low]–[high])**.
+**The same run doesn't give the same score.** The same model, prompt and documents scored 90% recall on my laptop and 81% in CI, even at temperature 0. A single eval number from a cloud model can be off by about 10 points, so the eval now repeats each run and reports a mean and range. On the final run over 8 real insurer documents, **gemma4 31B scored 96% precision and 87% recall, the same in all 3 runs**. gpt-oss 120B, a model four times its size, scored 89% precision and 73% recall, ranging from 66% to 86% across the same 3 runs. Bigger was slower, less accurate and less consistent.
 
 ## A data gap that would have told someone the wrong thing
 
-When the agent finally tested the map against the live data services, it found that URI's storm model has holes: some beachfront cells have no value at all. The map would have told someone with an oceanfront lot "No, it won't flood." The fix samples a small area around the tap instead of one point, and falls back to FEMA's coastal zone where URI has nothing. That test happened late, after I asked the agent to make sure the map actually answered the question. It should have happened first.
+When the agent finally tested the map against the live data services, it found that URI's storm model has holes: some beachfront cells have no value at all. The map would have told someone with an oceanfront lot "No, it won't flood." The fix uses the point's own value, takes the median of nearby cells only where the point has no data, and falls back to FEMA's coastal zone where URI has nothing. (The first version took the deepest nearby cell, which a later audit caught overstating depth by up to 3 feet next to open water.) That test happened late, after I asked the agent to make sure the map actually answered the question. It should have happened first.
 
 ## What I'd point to in the agent's work
 
 - **What I kept:** the quote check, the item-by-item repair, testing against recorded responses so CI never calls a model, and the eval report that lists every miss by name.
 - **What I rejected or redirected:** a six-layer map that answered nothing; zip files as a delivery mechanism (we moved to a GitHub repo with CI); and the claim that "almost every property can get insurance." I asked about Florida, where insurers have been leaving, and the honest answer had two caveats the agent hadn't mentioned: the federal program's authorization expires December 11, 2026, and "available" isn't "affordable." 
-- **What I had to check myself:** the labels. The agent wrote the first labels from summaries of the PDFs, and said so in every label file. Checking them against the documents moved precision from [before] to [after], because some of the model's "extra" findings were right and my labels were wrong.
+- **What I had to check myself:** the labels. The agent wrote the first labels from summaries of the PDFs, and said so in every label file. Checking them against the documents line by line added facts the drafts had missed (waiting periods, elevation-certificate rules, MSI's condo and manufactured-home exclusions). Every "extra" the model reported that I disputed turned out to be the model's error, not the label's.
 
 ## How it runs
 
-- **CI on every push:** lint, type checks, [N] tests and a coverage gate, on two Python versions, plus a check that the Docker image starts and answers health checks. That container check caught a real bug: the app logged to stderr, where the container platform wasn't collecting it.
+- **CI on every push:** lint, type checks, over 130 tests and an 85% coverage floor, on two Python versions, plus a check that the Docker image starts and answers health checks. That container check caught a real bug: the app logged to stderr, where the container platform wasn't collecting it.
 - **The eval runs on demand** as a GitHub Actions workflow with the model key as a secret. It posts the results table on the run page and saves the raw model answers, so I can rescore them locally for free after fixing a label.
-- **Deployment:** the map and API run as one DigitalOcean app. The map calls `/api/property`, which does the lookups with caching, retries and per-source error tracking.
+- **Deployment:** the map and API run on a DigitalOcean droplet as a systemd service, deployed by one script that CI rehearses on a fresh machine on every push. The map calls `/api/property`, which does the lookups with caching, retries and per-source error tracking.
 
-The code is at github.com/martin473/flood-insurance-map, and the map is live at [URL].
+The code is at github.com/martin473/flood-insurance-map, and the map is live at http://24.144.126.58:8080.

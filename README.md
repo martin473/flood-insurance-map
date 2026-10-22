@@ -70,11 +70,18 @@ Each product is flattened into atomic facts (`location:cbrs`, `state:all_except:
 
 For Ollama models the report shows latency and token counts; there's no per-token cost. The comparison worth making is size against accuracy: does a bigger model beat a smaller one by enough to justify the slower run, and how many invented quotes does the verifier catch from each? Check your plan's usage limits on ollama.com before a large run. For Claude, `--repeat 2` runs each document twice; the second run reads the document from the prompt cache, so the report shows the cost with and without caching. Results go to `evals/runs/<timestamp>.json` and `evals/runs/latest.md`.
 
-**Eval set.** Three real documents with four programs: an RT Specialty comparison sheet (Hiscox FloodPlus and Neptune Flood, 2023), the Hiscox FloodPlus brochure (2024) and the MSI Residential Flood quick reference guide (2026). They cover a two-program comparison table, a marketing brochure and a dense one-pager.
+**Eval set.** Nine public insurer documents in `evals/sources.json`, labeled in `evals/labels/` and checked line by line against each document's text: carrier brochures and guides (Hiscox 2020 and 2024, MSI 2025, Neptune 2023), broker comparison sheets (RT Specialty 2022 and 2023, Burns & Wilcox 2025, QuickHome) and an MSI comparison with the NFIP. Neptune's sheet refuses downloads from GitHub's servers (HTTP 403), so CI scores the other eight.
 
-> **The labels are drafts.** I wrote them from summaries of each PDF, not a line-by-line read, and each file says so. Check every fact against the document before quoting scores. Disagreements are the interesting part: write down which side was wrong.
+**Results** ([run 39703488854](https://github.com/martin473/flood-insurance-map/actions/runs/39703488854), October 21, 2026; 8 documents, 3 runs, mean with lowest–highest):
 
-**Results:** not run yet. This needs an API key and the downloaded PDFs; paste `evals/runs/latest.md` here after the first run.
+| Model | Precision (verified) | Recall (verified) | F1 (verified) | Seconds per document | Tokens per document (in / out) |
+|---|---|---|---|---|---|
+| gemma4 31B | 96% | 87% | 91% | 3.2 | 2,855 / 685 |
+| gpt-oss 120B | 89% (88–90%) | 73% (66–86%) | 80% (76–88%) | 6.8 | 2,733 / 2,382 |
+
+Both run on Ollama Cloud's free plan, so there's no per-document cost. The smaller model is more accurate and gave the same answer in all three runs. Where it misses: dollar limits (55% recall), flood-zone rules (67%) and building exclusions (73%); it finds every state rule and availability statement.
+
+On this set the quote check doesn't raise precision (gemma4: 96% before and after) but costs 9 points of recall: it rejects some correct rules, mostly limits quoted from comparison tables whose extracted text order doesn't match the quote. Matching quotes inside tables more loosely is the next improvement.
 
 ## What neighbors paid
 
