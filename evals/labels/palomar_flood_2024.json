@@ -1,0 +1,81 @@
+{
+ "document": "palomar_flood_2024",
+ "status": "checked against the document text on 2026-10-21, using verbatim quotes pulled from the PDF",
+ "notes": "Two-page overview, version V.23_10, posted 08-24. 'Available in:' lists 30 states; Rhode Island is not among them. Written by an admitted company and an E&S company, so surplus_lines is left unset. 'No waiting period' is labeled as 0 days. Debris removal and the NFIP comparison column are not labeled; ICC says 'Same as NFIP', so it has no amount of its own. Condo unit-owner coverage in select states is not an exclusion.",
+ "products": [
+  {
+   "match": [
+    "palomar"
+   ],
+   "product": {
+    "insurer": "Palomar",
+    "program": "Palomar Residential Flood",
+    "availability": {
+     "mode": "only_listed",
+     "states": [
+      "AR",
+      "AZ",
+      "CA",
+      "CO",
+      "CT",
+      "GA",
+      "HI",
+      "IL",
+      "IN",
+      "KS",
+      "KY",
+      "MA",
+      "ME",
+      "MI",
+      "MO",
+      "MS",
+      "NC",
+      "NJ",
+      "NM",
+      "NV",
+      "OK",
+      "OR",
+      "PA",
+      "SC",
+      "TN",
+      "TX",
+      "UT",
+      "VA",
+      "WA",
+      "WI"
+     ]
+    },
+    "elevation_certificate_required": false,
+    "waiting_period_days": 0,
+    "location_exclusions": [
+     {
+      "kind": "over_water"
+     }
+    ],
+    "property_exclusions": [
+     {
+      "kind": "manufactured_home"
+     },
+     {
+      "kind": "prior_losses",
+      "detail": "no flood loss in last 10 years and no flood loss excess of $150,000"
+     }
+    ],
+    "limits": [
+     {
+      "kind": "dwelling",
+      "amount_usd": 5000000
+     },
+     {
+      "kind": "contents",
+      "amount_usd": 1000000
+     },
+     {
+      "kind": "loss_of_use",
+      "amount_usd": 50000
+     }
+    ]
+   }
+  }
+ ]
+}

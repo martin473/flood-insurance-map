@@ -1,0 +1,125 @@
+{
+ "document": "msi_training_2025",
+ "status": "checked against the document text on 2026-10-21, using verbatim quotes pulled from the PDF",
+ "notes": "MSI agent training deck, September 2025, describing two programs MSI sells: MSI Flood (Sutton Specialty) and Hiscox FloodPlus. The states listed for Hiscox FloodPlus are where MSI offers it, which may be narrower than Hiscox's own availability. MSI Flood's '$1.25M combined building/content limit' is labeled total_insured_value. Hiscox's ICC ('$30K or 5% of Building, whichever is greater') has no fixed amount and isn't labeled. 'Buildings not walled and roofed', farms, geocoding and replacement-cost caps are 'other'. The deck says its criteria are not exhaustive.",
+ "products": [
+  {
+   "match_any": [
+    "msi",
+    "sutton"
+   ],
+   "product": {
+    "insurer": "MSI",
+    "program": "MSI Flood (Sutton Specialty)",
+    "availability": {
+     "mode": "all_except",
+     "states": [
+      "LA",
+      "AK",
+      "KY",
+      "HI"
+     ]
+    },
+    "waiting_period_days": 5,
+    "location_exclusions": [
+     {
+      "kind": "barrier_island"
+     },
+     {
+      "kind": "over_water"
+     }
+    ],
+    "property_exclusions": [
+     {
+      "kind": "prior_losses",
+      "detail": "2 or more flood related claims"
+     },
+     {
+      "kind": "other",
+      "detail": "buildings not walled and roofed; farms"
+     },
+     {
+      "kind": "condo"
+     },
+     {
+      "kind": "manufactured_home"
+     },
+     {
+      "kind": "subgrade_contents",
+      "detail": "more than 50% of the contents on a subgrade floor"
+     }
+    ],
+    "limits": [
+     {
+      "kind": "total_insured_value",
+      "amount_usd": 1250000
+     },
+     {
+      "kind": "increased_cost_of_compliance",
+      "amount_usd": 30000
+     }
+    ]
+   }
+  },
+  {
+   "match": [
+    "floodplus"
+   ],
+   "product": {
+    "insurer": "Hiscox",
+    "program": "Hiscox FloodPlus",
+    "availability": {
+     "mode": "only_listed",
+     "states": [
+      "CA",
+      "FL",
+      "GA",
+      "IL",
+      "MA",
+      "MI",
+      "NC",
+      "NJ",
+      "NY",
+      "OH",
+      "SC",
+      "TX",
+      "VA",
+      "WA"
+     ]
+    },
+    "waiting_period_days": 7,
+    "location_exclusions": [
+     {
+      "kind": "over_water"
+     }
+    ],
+    "property_exclusions": [
+     {
+      "kind": "manufactured_home"
+     },
+     {
+      "kind": "condo"
+     },
+     {
+      "kind": "prior_losses",
+      "detail": "any history of prior losses"
+     },
+     {
+      "kind": "other",
+      "detail": "commercial exposure, asbestos or adobe construction, docks or houseboats, no permanent foundation"
+     }
+    ],
+    "limits": [
+     {
+      "kind": "dwelling",
+      "amount_usd": 1900000
+     },
+     {
+      "kind": "contents",
+      "amount_usd": 1300000
+     }
+    ]
+   }
+  }
+ ]
+}
