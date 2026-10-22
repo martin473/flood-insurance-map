@@ -1,0 +1,43 @@
+name: doctext
+
+# Downloads eval documents and posts their text exactly as the verifier sees it (pypdf), as
+# annotations, so labels can be written against the same text the quote check uses.
+# The PDFs themselves are never committed or uploaded.
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Document ids from evals/sources.json, space-separated"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  text:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - name: Download and extract
+        env:
+          ONLY: ${{ inputs.only }}
+        run: |
+          floodrules fetch | tee fetch.log
+          args=""
+          for d in $ONLY; do args="$args --only $d"; done
+          floodrules text $args > text.md
+          echo "::notice title=Fetch::$(sed -e 's/%/%25/g' fetch.log | awk 'BEGIN{ORS="%0A"} {print}')"
+          split -b 3800 text.md part-
+          i=1
+          for f in part-*; do
+            echo "::notice title=Text part $(printf %02d $i)::$(sed -e 's/%/%25/g' "$f" | awk 'BEGIN{ORS="%0A"} {print}')"
+            i=$((i+1))
+            if [ "$i" -gt 9 ]; then break; fi
+          done
+          true

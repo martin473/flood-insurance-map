@@ -58,6 +58,22 @@ def cmd_fetch(args) -> int:
     return 0
 
 
+def cmd_text(args) -> int:
+    """Print a document's text exactly as the verifier sees it (pypdf), page by page, for writing labels."""
+    for d in _sources(Path(args.sources)):
+        if args.only and d["id"] not in args.only:
+            continue
+        path = ROOT / d["file"]
+        if not path.exists():
+            print(f"## {d['id']}: missing {d['file']} (run `floodrules fetch`)\n")
+            continue
+        doc = read_pdf(path, name=f"{d['id']}.pdf")
+        print(f"## {d['id']} ({len(doc.pages)} pages)\n")
+        for i, page in enumerate(doc.pages, 1):
+            print(f"[page {i}]\n{page.strip()}\n")
+    return 0
+
+
 def cmd_models(args) -> int:
     from .ollama import Ollama
     client = Ollama(model="")
@@ -352,6 +368,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("models", help="list the Ollama models available (Ollama Cloud when OLLAMA_API_KEY is set)").set_defaults(fn=cmd_models)
     sub.add_parser("fetch", help="download the eval PDFs listed in evals/sources.json").set_defaults(fn=cmd_fetch)
+    t = sub.add_parser("text", help="print documents' text as the verifier sees it, for writing labels")
+    t.add_argument("--only", action="append", help="limit to these document ids")
+    t.set_defaults(fn=cmd_text)
     e = sub.add_parser("extract", help="extract and verify rules from one PDF")
     e.add_argument("pdf")
     e.add_argument("--model", default=DEFAULT_MODEL, help="Claude model ID, or ollama:<name> for a local model")

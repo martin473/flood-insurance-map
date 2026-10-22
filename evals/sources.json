@@ -69,6 +69,30 @@
    "file": "data/docs/neptune_agent_2023.pdf",
    "labels": "evals/labels/neptune_agent_2023.json",
    "published": "2023-05"
+  },
+  {
+   "id": "rethought_flood_2024",
+   "title": "reThought Flood: residential flood reference guide (version 04-24)",
+   "url": "https://aaisonline.com/wp-content/uploads/2024/05/ReThought-Residential-Reference-Guide-v04-24.pdf",
+   "file": "data/docs/rethought_flood_2024.pdf",
+   "labels": "evals/labels/rethought_flood_2024.json",
+   "published": "2024-04"
+  },
+  {
+   "id": "palomar_flood_2024",
+   "title": "Palomar: personal lines flood overview (08-24)",
+   "url": "https://plmr.com/wp-content/uploads/2024/09/PLMR-PL-Flood-Overview-08_24.pdf",
+   "file": "data/docs/palomar_flood_2024.pdf",
+   "labels": "evals/labels/palomar_flood_2024.json",
+   "published": "2024-08"
+  },
+  {
+   "id": "msi_training_2025",
+   "title": "MSI: residential flood new business and underwriting training (September 2025)",
+   "url": "https://resources.msimga.com/hubfs/MSI%20Flood%20Training%20vRetail%203.pdf?hsLang=en",
+   "file": "data/docs/msi_training_2025.pdf",
+   "labels": "evals/labels/msi_training_2025.json",
+   "published": "2025-09"
   }
  ]
 }
