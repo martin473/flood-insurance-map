@@ -191,6 +191,18 @@ def render_markdown(results: list[dict]) -> str:
         lines.append(f"| {r['model']}{' (replay)' if r['replay'] else ''} | {pct(raw['precision'])} | {pct(raw['recall'])} | {pct(raw['f1'])} | "
                      f"{pct(ver['precision'])} | {pct(ver['recall'])} | {found} | "
                      f"{_cost(c1, r['model'])} | {_cost(c2, r['model'])} | {c1['latency_s']:.1f}s |")
+    lines += ["", "## Time and tokens per document (run 1)", "",
+              "| Model | Documents scored | Failed | Seconds per document | Input tokens per document | Output tokens per document |",
+              "|---|---|---|---|---|---|"]
+    for r in results:
+        ok = [d for d in r["documents"] if d.get("attempts")]
+        failed = sum(1 for d in r["documents"] if "error" in d)
+        n = len(ok) or 1
+        usage = [d["attempts"][0]["usage"] for d in ok]
+        secs = sum(u.get("latency_s", 0) for u in usage) / n
+        tin = sum(u.get("input_tokens", 0) for u in usage) / n
+        tout = sum(u.get("output_tokens", 0) for u in usage) / n
+        lines.append(f"| {r['model']} | {len(ok)} | {failed} | {secs:.1f} | {tin:,.0f} | {tout:,.0f} |")
     lines += ["", "## Recall by category (verified)", "", "| Model | " + " | ".join(CATEGORIES) + " |", "|---|" + "---|" * len(CATEGORIES)]
     for r in results:
         cats = r["totals"]["verified"]["by_category"]

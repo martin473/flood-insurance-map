@@ -97,6 +97,8 @@ def test_eval_live_then_replay(eval_env, capsys):
     assert cli.main(["--sources", str(sources), "eval", "--repeat", "2"]) == 0
     out = capsys.readouterr().out
     assert "| claude-haiku-5-5 |" in out and "missed" not in out
+    # per-document time and tokens from the fake API's usage (120 in, 900 out per call)
+    assert "| claude-haiku-5-5 | 1 | 0 |" in out and "| 120 | 900 |" in out
     run = json.loads(next((root / "evals" / "runs").glob("*.json")).read_text())[0]
     doc = run["documents"][0]
     assert doc["verified"]["overall"]["precision"] == 1.0   # verifier removed the invented rule

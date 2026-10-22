@@ -1,0 +1,57 @@
+{
+ "document": "neptune_agent_2023",
+ "status": "checked against the document text on 2026-10-21, using verbatim quotes pulled from the PDF",
+ "notes": "One-page agent sheet, revised 05/23. It lists no states, so availability is not_stated. 'Elevation Certificate (EC): NO' is the Neptune column. Temporary living expenses (up to $10,000) is labeled loss_of_use and unattached structures (up to $50,000) other_structures. Pool repair and basement contents have no limit kind in the schema and aren't labeled. The NFIP comparison column is not labeled.",
+ "products": [
+  {
+   "match": [
+    "neptune"
+   ],
+   "product": {
+    "insurer": "Neptune Flood",
+    "program": "Neptune Residential Flood",
+    "availability": {
+     "mode": "not_stated",
+     "states": []
+    },
+    "elevation_certificate_required": false,
+    "waiting_period_days": 10,
+    "location_exclusions": [
+     {
+      "kind": "cbrs"
+     },
+     {
+      "kind": "over_water"
+     }
+    ],
+    "property_exclusions": [
+     {
+      "kind": "manufactured_home"
+     },
+     {
+      "kind": "prior_losses",
+      "detail": "more than one flood loss, or a flood loss greater than $25,000"
+     }
+    ],
+    "limits": [
+     {
+      "kind": "dwelling",
+      "amount_usd": 4000000
+     },
+     {
+      "kind": "contents",
+      "amount_usd": 500000
+     },
+     {
+      "kind": "loss_of_use",
+      "amount_usd": 10000
+     },
+     {
+      "kind": "other_structures",
+      "amount_usd": 50000
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -61,6 +61,14 @@
    "url": "https://resources.msimga.com/hubfs/MSI%20Flood%20vs.%20NFIP%20Flyer.pdf?hsLang=en",
    "file": "data/docs/msi_flood_vs_nfip.pdf",
    "labels": "evals/labels/msi_flood_vs_nfip.json"
+  },
+  {
+   "id": "neptune_agent_2023",
+   "title": "Neptune Flood: residential agent sheet (revised 05/23)",
+   "url": "https://neptuneflood.com/wp-content/uploads/2022/07/Residential-Agent.pdf",
+   "file": "data/docs/neptune_agent_2023.pdf",
+   "labels": "evals/labels/neptune_agent_2023.json",
+   "published": "2023-05"
   }
  ]
 }

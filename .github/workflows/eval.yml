@@ -10,7 +10,7 @@ on:
       models:
         description: "Space-separated models, e.g. ollama:nemotron-3-nano:30b ollama:gemma4:31b"
         required: true
-        default: "ollama:nemotron-3-nano:30b"
+        default: "ollama:gpt-oss:120b ollama:gemma4:31b"
       runs:
         description: "Times to repeat the eval; scores are reported as mean (lowest-highest)"
         required: true
@@ -47,7 +47,14 @@ jobs:
           floodrules eval $args --runs "$RUNS"
       - name: Post the results on the run page
         if: always()
-        run: test -f evals/runs/latest.md && cat evals/runs/latest.md >> "$GITHUB_STEP_SUMMARY" || true
+        run: |
+          test -f evals/runs/latest.md || exit 0
+          cat evals/runs/latest.md >> "$GITHUB_STEP_SUMMARY"
+          # also as annotations, readable through the checks API without downloading artifacts
+          enc() { sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}'; }
+          echo "::notice title=Eval summary::$(head -c 30000 evals/runs/latest.md | enc)"
+          tail -c +30001 evals/runs/latest.md | head -c 30000 > rest.md
+          if test -s rest.md; then echo "::notice title=Eval summary (continued)::$(enc < rest.md)"; fi
       - name: Save the report and model responses
         if: always()
         uses: actions/upload-artifact@v4
