@@ -30,7 +30,10 @@ jobs:
           python-version: "3.13"
       - run: pip install -e .
       - name: Download the eval documents
-        run: floodrules fetch
+        run: |
+          floodrules fetch | tee fetch.log
+          # the fetch result as an annotation, so a document CI couldn't download is visible
+          echo "::notice title=Eval documents::$(sed -e 's/%/%25/g' fetch.log | awk 'BEGIN{ORS="%0A"} {print}')"
       - name: Run the eval
         env:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
@@ -50,11 +53,13 @@ jobs:
         run: |
           test -f evals/runs/latest.md || exit 0
           cat evals/runs/latest.md >> "$GITHUB_STEP_SUMMARY"
-          # also as annotations, readable through the checks API without downloading artifacts
-          enc() { sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}'; }
-          echo "::notice title=Eval summary::$(head -c 30000 evals/runs/latest.md | enc)"
-          tail -c +30001 evals/runs/latest.md | head -c 30000 > rest.md
-          if test -s rest.md; then echo "::notice title=Eval summary (continued)::$(enc < rest.md)"; fi
+          # also as annotations (GitHub keeps about 4 KB of each), readable through the checks API
+          split -b 3800 evals/runs/latest.md part-
+          i=1
+          for f in part-*; do
+            echo "::notice title=Eval summary part $i::$(sed -e 's/%/%25/g' "$f" | awk 'BEGIN{ORS="%0A"} {print}')"
+            i=$((i+1)); [ $i -gt 9 ] && break
+          done
       - name: Save the report and model responses
         if: always()
         uses: actions/upload-artifact@v4
