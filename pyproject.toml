@@ -29,6 +29,7 @@ include = ["floodrules*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["live: calls the real data services; runs nightly with FLOODRULES_LIVE=1"]
 
 [tool.ruff]
 line-length = 160

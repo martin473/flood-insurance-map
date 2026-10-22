@@ -20,6 +20,27 @@ jobs:
       - run: mypy --ignore-missing-imports floodrules
       - run: pytest --cov=floodrules --cov-report=term-missing --cov-fail-under=85
 
+  browser:
+    # The map page in Chromium against recorded data (tests/test_browser.py): the three answers,
+    # neighbor costs, the year slider, address search, the API path and the fallback, /status.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev]" playwright
+      - run: python -m playwright install --with-deps chromium
+      - name: Browser tests
+        env:
+          FLOODRULES_REQUIRE_BROWSER: "1"
+        run: |
+          set -o pipefail
+          pytest tests/test_browser.py -o addopts="" -q -rs 2>&1 | tee browser.txt
+          if grep -q "skipped" browser.txt; then echo "::error::browser tests were skipped"; exit 1; fi
+      - if: failure()
+        run: echo "::error title=Browser tests::$(tail -60 browser.txt | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')"
+
   docker:
     # Builds the deploy image and checks it starts and answers /health, so a broken Dockerfile
     # is caught here rather than in a failed DigitalOcean deploy.

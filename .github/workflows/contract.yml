@@ -1,0 +1,61 @@
+name: contract
+
+# Nightly checks that the live data services still look the way this project reads them:
+# field names, raster ids, layer numbers, FEMA's data freshness, the Treasury spreadsheet's columns,
+# and the five recorded spots' answers. On failure it opens a GitHub issue naming what changed
+# (or comments on the open one); when the checks pass again it closes it.
+
+on:
+  schedule:
+    - cron: "23 9 * * *"   # daily, 5:23 a.m. Eastern
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: contract
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev,data]"
+      - name: Check the live services
+        id: check
+        env:
+          FLOODRULES_LIVE: "1"
+        run: |
+          set -o pipefail
+          pytest tests/test_contract_live.py -o addopts="" -q -rf 2>&1 | tee result.txt
+      - name: Post the result on the run page
+        if: always()
+        run: |
+          { echo '```'; tail -40 result.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Contract check::$(tail -40 result.txt | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')"
+      - name: Open or update an issue when a check fails
+        if: failure() && steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Nightly data contract check failed"
+          { echo "A live data service no longer matches what the app reads. Run: $RUN_URL"; echo; echo '```'; grep -E '^(FAILED|ERROR)' result.txt | head -30; echo '```';
+            echo; echo "If the change is real, update the code or re-record the fixture in tests/test_property.py."; } > body.md
+          num=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -n "$num" ]; then gh issue comment "$num" --body-file body.md; else gh issue create --title "$title" --body-file body.md; fi
+      - name: Close the issue when the checks pass again
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          num=$(gh issue list --state open --search 'in:title "Nightly data contract check failed"' --json number --jq '.[0].number')
+          if [ -n "$num" ]; then gh issue close "$num" --comment "Passing again: $RUN_URL"; fi

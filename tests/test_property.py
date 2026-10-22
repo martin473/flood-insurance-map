@@ -1,7 +1,8 @@
 """Property lookups against recorded responses.
 
 The values below are what FEMA NFHL, USFWS CBRS, URI STORMTOOLS and Nominatim returned
-for five Rhode Island spots on 2026-10-21. The fake transport serves them in the same
+for five Rhode Island spots on 2026-10-21 (depths re-read that evening with the point-first method).
+The nightly contract check (tests/contract) compares them with the live services. The fake transport serves them in the same
 shapes the real services use, so these tests pin the full lookup-to-answer path offline.
 """
 
@@ -26,14 +27,15 @@ def ms(d):
 
 SPOTS = {
     "misquamicut": dict(lat=41.3260, lng=-71.7920, fema=("AE", "T", None), cbrs=("RI-13P", "Otherwise Protected Area", date(2025, 11, 25)),
-                        depths=[13.5, 16.9, 18.6, 22.1, 25.5, 30.7], town="Westerly"),
+                        depths=[12.0, 15.4, 17.1, 20.6, 24.0, 29.1], town="Westerly"),
     "napatree": dict(lat=41.3113, lng=-71.8826, fema=("VE", "T", None), cbrs=("D08", "System Unit", date(1983, 10, 1)),
                      depths=[0, 0, 0, 0, 0, 0], town="Westerly"),
     "newport_point": dict(lat=41.4925, lng=-71.3215, fema=("VE", "T", None), cbrs=None,
                           depths=[12.4, 14.8, 15.9, 18.0, 20.1, 23.2], town="Newport"),
-    "oakland_beach": dict(lat=41.6980, lng=-71.4040, fema=("X", "F", None), cbrs=None,
-                          depths=[0, 2.7, 3.8, 5.8, 8.0, 12.0], town="Warwick"),
-    "cranston": dict(lat=41.7798, lng=-71.4950, fema=("X", "F", None), cbrs=None, depths=[0, 0, 0, 0, 0, 0], town="Cranston"),
+    "oakland_beach": dict(lat=41.6980, lng=-71.4040, fema=("X", "F", "0.2 PCT ANNUAL CHANCE FLOOD HAZARD"), cbrs=None,
+                          depths=[0, 1.5, 1.5, 3.3, 5.6, 9.8], town="Warwick"),
+    "cranston": dict(lat=41.7798, lng=-71.4950, fema=("X", "F", "AREA OF MINIMAL FLOOD HAZARD"), cbrs=None, depths=[0, 0, 0, 0, 0, 0],
+                     town="Cranston"),
 }
 
 
@@ -111,8 +113,8 @@ def test_three_answers_for_recorded_spots(name):
 def test_depths_use_the_point_itself_and_follow_the_year():
     r = report("misquamicut")
     assert [d.depth_ft for d in r.depths] == SPOTS["misquamicut"]["depths"]
-    assert "16.9 ft" in r.will_it_flood.detail and "by 2056" in r.will_it_flood.detail
-    assert "13.5 ft" in report("misquamicut", year="today").will_it_flood.detail
+    assert "15.4 ft" in r.will_it_flood.detail and "by 2056" in r.will_it_flood.detail
+    assert "12.0 ft" in report("misquamicut", year="today").will_it_flood.detail
     assert "7 ft of sea level rise" in report("misquamicut", year="after-2100").will_it_flood.detail
 
 
