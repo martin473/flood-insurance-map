@@ -34,3 +34,17 @@ def test_status_page_is_served(client):
     r = client.get("/status")
     assert r.status_code == 200 and "<title>Flood Outlook Status</title>" in r.text
     assert "fetch(API+\"/metrics\")" in r.text
+
+
+def test_traces_record_paths_within_the_api_when_mounted(client):
+    """Mounted at /api, a lookup's trace still says /property, which is what /status filters on."""
+    from test_property import Recorded
+
+    from floodrules import api, tracing
+    from floodrules.sources import Sources
+    api.sources = Sources(Recorded(), sleep=lambda x: None)
+    tracing.clear()
+    assert client.get("/api/property", params={"lat": 41.3260, "lng": -71.7920}).status_code == 200
+    traces = client.get("/api/traces", params={"path": "/property"}).json()
+    assert len(traces) == 1 and traces[0]["attrs"]["path"] == "/property"
+    assert any(k.startswith("/property ") for k in client.get("/api/metrics").json()["requests"])

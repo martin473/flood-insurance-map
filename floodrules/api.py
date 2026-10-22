@@ -64,8 +64,9 @@ async def log_requests(request: Request, call_next):
     """One JSON log line per request, with an id the client can quote in a bug report, plus a trace
     line with a span per data-source call. A caller's W3C traceparent header is continued."""
     rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
-    trace = tracing.Trace(f"{request.method} {request.url.path}", request.headers.get("traceparent"), rid)
-    trace.root.attrs.update(method=request.method, path=request.url.path)
+    path = _route_path(request)
+    trace = tracing.Trace(f"{request.method} {path}", request.headers.get("traceparent"), rid)
+    trace.root.attrs.update(method=request.method, path=path)
     request.state.trace = trace
     start = time.monotonic()
     status = 500
@@ -80,12 +81,19 @@ async def log_requests(request: Request, call_next):
         ms = round((time.monotonic() - start) * 1000, 1)
         trace.root.attrs["status"] = status
         with _lock:
-            _requests[f"{request.url.path} {status}"] += 1
+            _requests[f"{path} {status}"] += 1
         log.info(json.dumps({"event": "request", "id": rid, "trace_id": trace.trace_id, "method": request.method,
                              "path": request.url.path, "status": status, "ms": ms}))
         done = tracing.finish(trace)
         if len(done["spans"]) > 1:   # only requests that called a data source are worth a trace line
             log.info(json.dumps({"event": "trace", **done}))
+
+
+def _route_path(request: Request) -> str:
+    """The path within this API, the same whether it runs on its own (/property) or mounted under
+    the site at /api (/api/property), so traces and counts can be filtered one way."""
+    path, root = request.url.path, request.scope.get("root_path") or ""
+    return path[len(root):] or "/" if root and path.startswith(root) else path
 
 
 def _client_ip(request: Request) -> str:
