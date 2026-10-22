@@ -33,6 +33,8 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MODEL = os.environ.get("FLOODRULES_MODEL", "claude-haiku-5-5")
 CACHE = ROOT / "evals" / "cache"
 RUNS = ROOT / "evals" / "runs"
+FETCH_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; flood-insurance-map/0.1; +https://github.com/martin473/flood-insurance-map)",
+                 "Accept": "application/pdf,*/*;q=0.8"}
 
 
 def _sources(path: Path) -> list[dict]:
@@ -46,7 +48,8 @@ def cmd_fetch(args) -> int:
             print(f"have  {dest.name}")
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
-        r = requests.get(d["url"], timeout=60)
+        # some publishers refuse the default python-requests user agent with a 403
+        r = requests.get(d["url"], timeout=60, headers=FETCH_HEADERS)
         if r.status_code != 200 or not r.content.startswith(b"%PDF"):
             print(f"FAIL  {d['id']}: HTTP {r.status_code}. Download it by hand from {d['url']} to {dest}")
             continue

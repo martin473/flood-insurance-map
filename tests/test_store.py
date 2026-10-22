@@ -51,7 +51,7 @@ def test_cli_fetch_skips_existing_and_reports_failures(tmp_path, monkeypatch, ca
         def __init__(self, code, content):
             self.status_code, self.content = code, content
 
-    monkeypatch.setattr(cli.requests, "get", lambda url, timeout: Resp(403, b"") if "blocked" in url else Resp(200, b"%PDF-1.7 data"))
+    monkeypatch.setattr(cli.requests, "get", lambda url, timeout, headers=None: Resp(403, b"") if "blocked" in url else Resp(200, b"%PDF-1.7 data"))
     assert cli.main(["--sources", str(sources), "fetch"]) == 0
     out = capsys.readouterr().out
     assert "have  have.pdf" in out and "FAIL  blocked" in out and "saved good.pdf" in out

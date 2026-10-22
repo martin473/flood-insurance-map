@@ -58,8 +58,10 @@ jobs:
           i=1
           for f in part-*; do
             echo "::notice title=Eval summary part $i::$(sed -e 's/%/%25/g' "$f" | awk 'BEGIN{ORS="%0A"} {print}')"
-            i=$((i+1)); [ $i -gt 9 ] && break
+            i=$((i+1))
+            if [ "$i" -gt 9 ]; then break; fi
           done
+          true
       - name: Save the report and model responses
         if: always()
         uses: actions/upload-artifact@v4
