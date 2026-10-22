@@ -86,3 +86,30 @@ def test_rejection_reports_the_closest_passage(guide_pdf):
     near, score = v.closest("homes in a FEMA designated floodway")
     assert near is not None and "floodway" in near and 0.6 < score < 1.0
     assert v.closest("") == (None, None)
+
+
+def test_table_cells_verify_when_they_name_the_claim():
+    # a comparison table: one value per cell, as the real broker sheets are laid out
+    doc = Document(name="d", pages=["Ineligible Condominiums Mobile/Manufactured homes Dwelling $1,250,000 Contents $ 875,000 ICC $30K Yes"])
+    data = {"products": [{"insurer": "X", "program": "X", "availability": {"mode": "not_stated"},
+                          "property_exclusions": [{"kind": "condo", "evidence": {"quote": "Condominiums", "page": 1}},
+                                                  {"kind": "manufactured_home", "evidence": {"quote": "Mobile/Manufactured homes", "page": 1}},
+                                                  {"kind": "prior_losses", "evidence": {"quote": "Yes", "page": 1}}],
+                          "limits": [{"kind": "dwelling", "amount_usd": 1250000, "evidence": {"quote": "$1,250,000", "page": 1}},
+                                     {"kind": "contents", "amount_usd": 875000, "evidence": {"quote": "$875,000", "page": 1}},
+                                     {"kind": "increased_cost_of_compliance", "amount_usd": 30000, "evidence": {"quote": "ICC $30K", "page": 1}},
+                                     {"kind": "other_structures", "amount_usd": 125000, "evidence": {"quote": "$1,250,000", "page": 1}}]}]}
+    verified, report = Verifier(doc).check(Extraction.model_validate(data))
+    p = verified.products[0]
+    assert [x.kind for x in p.property_exclusions] == ["condo", "manufactured_home"]
+    assert [x.amount_usd for x in p.limits] == [1250000, 875000, 30000]
+    # "Yes" doesn't name a prior-loss rule, and a cell stating a different amount doesn't verify this limit
+    assert [r.reason for r in report.rejected] == ["quote too short to verify"] * 2
+
+
+def test_short_quote_naming_the_claim_must_still_be_in_the_document():
+    doc = Document(name="d", pages=["Dwelling $1,000,000"])
+    data = {"products": [{"insurer": "X", "program": "X", "availability": {"mode": "not_stated"},
+                          "limits": [{"kind": "dwelling", "amount_usd": 4000000, "evidence": {"quote": "$4,000,000", "page": 1}}]}]}
+    verified, report = Verifier(doc).check(Extraction.model_validate(data))
+    assert verified.products[0].limits == [] and report.rejected[0].reason == "quote not found in document"

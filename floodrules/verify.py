@@ -4,6 +4,11 @@ A rule survives only if its evidence quote appears in the document text. Matchin
 ignores case, whitespace, hyphenation at line breaks and curly quotes, because PDF
 text extraction mangles those. If the quote is found on a different page than cited,
 the rule is kept and its page corrected.
+
+Quotes need three words, so a common word can't vouch for a rule. The exception is a table
+cell ("$1,250,000", "Condominiums", "ICC $30K"): a one- or two-word quote is accepted when it is
+in the document AND names the claim itself, meaning a limit's quote states its amount and an
+exclusion's quote contains the term for its kind. A bare "Yes" or "Excluded" still fails.
 """
 
 from __future__ import annotations
@@ -17,6 +22,20 @@ from .pdftext import Document
 from .schemas import Evidence, Extraction, Product
 
 MIN_QUOTE_WORDS = 3
+# words that name each exclusion kind, for accepting short table-cell quotes
+KIND_TERMS: dict[str, tuple[str, ...]] = {
+    "cbrs": ("cbra", "cbrs", "cobra", "coastal barrier"),
+    "floodway": ("floodway",),
+    "over_water": ("over water",),
+    "island": ("island",),
+    "barrier_island": ("barrier island",),
+    "manufactured_home": ("manufactured", "mobile home", "mobile/"),
+    "condo": ("condo",),
+    "prior_losses": ("loss", "claim"),
+    "severe_repetitive_loss": ("repetitive", "srl"),
+    "subgrade_contents": ("subgrade", "basement"),
+    "nfip_grandfathered": ("grandfather",),
+}
 # curly quotes, en/em dashes and non-breaking spaces -> plain ASCII
 _PUNCT = str.maketrans("\u2018\u2019\u201c\u201d\u2013\u2014\u00a0", "''\"\"-- ")
 
@@ -26,6 +45,7 @@ def normalize(text: str) -> str:
     text = text.translate(_PUNCT)
     text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)   # re-join words hyphenated across lines
     text = re.sub(r"[^\w$%.,'\"/&+-]+", " ", text.lower())
+    text = re.sub(r"\$\s+(?=\d)", "$", text)                # "$ 1,700,000" -> "$1,700,000"
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -59,11 +79,13 @@ class Verifier:
     def __init__(self, doc: Document):
         self.pages = [normalize(p) for p in doc.pages]
 
-    def find(self, ev: Evidence | None) -> tuple[bool, int | None, str]:
+    def find(self, ev: Evidence | None, names_claim: bool = False) -> tuple[bool, int | None, str]:
+        """names_claim: the quote states the rule's own value or term (see names_claim()), so a
+        table cell shorter than MIN_QUOTE_WORDS can still verify it."""
         if ev is None or not ev.quote.strip():
             return False, None, "no evidence quote"
         q = normalize(ev.quote)
-        if len(q.split()) < MIN_QUOTE_WORDS:
+        if len(q.split()) < MIN_QUOTE_WORDS and not names_claim:
             return False, None, "quote too short to verify"
         cited = ev.page - 1
         if 0 <= cited < len(self.pages) and q in self.pages[cited]:
@@ -121,7 +143,7 @@ class Verifier:
             for fname in ("location_exclusions", "property_exclusions", "zone_conditions", "limits"):
                 kept = []
                 for item in getattr(data, fname):
-                    ok, page, why = self.find(item.evidence)
+                    ok, page, why = self.find(item.evidence, names_claim(fname, item))
                     if ok and fname == "limits" and item.evidence is not None and item.amount_usd not in money_values(item.evidence.quote):
                         # The quote exists but doesn't state this amount: the model calculated or guessed it,
                         # e.g. "20% of the dwelling limit" written as $450,000.
@@ -154,6 +176,19 @@ def money_values(text: str) -> set[int]:
         value = float(num.replace(",", ""))
         out.add(round(value * _SCALE.get(unit.lower(), 1)) if unit else round(value))
     return out
+
+
+def names_claim(fname: str, item) -> bool:
+    """Whether a rule's quote states the rule itself: a limit's amount, or the term for an exclusion's kind."""
+    ev = getattr(item, "evidence", None)
+    if ev is None or not ev.quote.strip():
+        return False
+    if fname == "limits":
+        return item.amount_usd in money_values(ev.quote)
+    if fname in ("location_exclusions", "property_exclusions"):
+        q = normalize(ev.quote)
+        return any(t in q for t in KIND_TERMS.get(item.kind.value if hasattr(item.kind, "value") else item.kind, ()))
+    return False
 
 
 def _describe(item) -> str:
