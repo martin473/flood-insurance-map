@@ -224,6 +224,9 @@ def render_markdown(results: list[dict]) -> str:
             lines.append(f"- **{d['id']}** ({d['pages']} pages{chunked}): precision {pct(v['overall']['precision'])}, recall {pct(v['overall']['recall'])}; "
                          f"{d['verification']['rejected']} rules rejected by the quote check, "
                          f"{len(d.get('schema_dropped', []))} dropped (commercial programs, or values that didn't fit the schema).")
+            for x in d["verification"].get("rejections", [])[:12]:
+                near = f" Closest in the document ({x['similarity']:.0%} similar): \"{x['closest']}\"" if x.get("closest") else ""
+                lines.append(f"  - rejected {x['field']} ({x['rule']}): {x['reason']}. Quote: \"{x['quote']}\".{near}")
             for x in d.get("schema_dropped", [])[:5]:
                 lines.append(f"  - dropped {x['field']} `{x['value']}`: {x['reason']}")
             for m in v["misses"][:8]:

@@ -78,3 +78,11 @@ def test_not_stated_availability_is_not_counted_as_a_rejection():
     data = {"products": [{"insurer": "X", "program": "X", "availability": {"mode": "not_stated"}}]}
     _, report = Verifier(doc).check(Extraction.model_validate(data))
     assert report.rejected == [] and report.kept == 0
+
+
+def test_rejection_reports_the_closest_passage(guide_pdf):
+    doc = read_pdf(guide_pdf)
+    v = Verifier(doc)
+    near, score = v.closest("homes in a FEMA designated floodway")
+    assert near is not None and "floodway" in near and 0.6 < score < 1.0
+    assert v.closest("") == (None, None)

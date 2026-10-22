@@ -8,6 +8,7 @@ the rule is kept and its page corrected.
 
 from __future__ import annotations
 
+import difflib
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -35,6 +36,8 @@ class Rejection:
     rule: str
     reason: str
     quote: str | None
+    closest: str | None = None       # the most similar passage in the document, for diagnosing rejections
+    similarity: float | None = None  # 0-1, difflib ratio between the quote and that passage
 
 
 @dataclass
@@ -70,6 +73,33 @@ class Verifier:
                 return True, i + 1, "found on a different page"
         return False, None, "quote not found in document"
 
+    def closest(self, quote: str | None) -> tuple[str | None, float | None]:
+        """The passage in the document most like the quote: a window of the same number of words,
+        scored with difflib. Only used to explain rejections, never to accept a rule."""
+        q = normalize(quote or "")
+        n = len(q.split())
+        if not n:
+            return None, None
+        best, best_score = None, 0.0
+        sm = difflib.SequenceMatcher(autojunk=False)
+        sm.set_seq2(q)
+        for page in self.pages:
+            words = page.split()
+            for size in {max(1, n - 2), n, n + 2}:
+                for i in range(0, max(1, len(words) - size + 1)):
+                    cand = " ".join(words[i:i + size])
+                    sm.set_seq1(cand)
+                    if sm.real_quick_ratio() <= best_score or sm.quick_ratio() <= best_score:
+                        continue
+                    r = sm.ratio()
+                    if r > best_score:
+                        best, best_score = cand, r
+        return best, round(best_score, 2)
+
+    def _reject(self, report: VerifyReport, label: str, fname: str, rule: str, why: str, quote: str | None) -> None:
+        near, score = self.closest(quote) if why == "quote not found in document" else (None, None)
+        report.rejected.append(Rejection(label, fname, rule, why, quote, near, score))
+
     def check(self, extraction: Extraction) -> tuple[Extraction, VerifyReport]:
         report = VerifyReport()
         products: list[Product] = []
@@ -84,8 +114,8 @@ class Verifier:
             elif ok and av_ev is not None:
                 self._keep(report, av_ev, page)
             else:
-                report.rejected.append(Rejection(label, "availability", f"{data.availability.mode} {data.availability.states}",
-                                                 why, data.availability.evidence.quote if data.availability.evidence else None))
+                self._reject(report, label, "availability", f"{data.availability.mode} {data.availability.states}",
+                             why, data.availability.evidence.quote if data.availability.evidence else None)
                 data.availability = data.availability.model_copy(update={"mode": "not_stated", "states": [], "evidence": None})
 
             for fname in ("location_exclusions", "property_exclusions", "zone_conditions", "limits"):
@@ -100,8 +130,7 @@ class Verifier:
                         self._keep(report, item.evidence, page)
                         kept.append(item)
                     else:
-                        report.rejected.append(Rejection(label, fname, _describe(item), why,
-                                                         item.evidence.quote if item.evidence else None))
+                        self._reject(report, label, fname, _describe(item), why, item.evidence.quote if item.evidence else None)
                 setattr(data, fname, kept)
             products.append(data)
         return Extraction(products=products), report
