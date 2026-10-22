@@ -5,7 +5,8 @@
   GET  /rules     the verified insurer rules currently loaded, with their sources
   POST /extract   upload an insurer PDF, get verified rules back (admin token required when set)
   GET  /health    liveness and loaded-rule count
-  GET  /metrics   per-data-source calls, errors, cache hits and latency; request counts
+  GET  /metrics   per-data-source calls, errors, cache hits and latency; request counts; data freshness
+  GET  /traces    the most recent request traces: one span per data-source call, with cache hits and retries
 
 Run:  uvicorn floodrules.api:app --reload
 """
@@ -21,12 +22,13 @@ import threading
 import time
 import uuid
 from collections import defaultdict, deque
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import store
+from . import store, tracing
 from .claude import ModelError
 from .engine import Decision, PropertyFacts, evaluate_all
 from .extract import make_extractor, run_extraction
@@ -47,7 +49,8 @@ if not log.handlers:
 
 app = FastAPI(title="Flood insurance map API", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
-                   allow_methods=["GET", "POST"], allow_headers=["*"], expose_headers=["x-request-id"])
+                   allow_methods=["GET", "POST"], allow_headers=["*"], expose_headers=["x-request-id", "traceparent"])
+MAP_DIR = Path(os.environ.get("FLOODRULES_MAP_DIR") or Path(__file__).resolve().parent.parent / "map")
 
 sources = Sources()
 _requests: dict[str, int] = defaultdict(int)
@@ -58,21 +61,31 @@ STARTED = time.time()
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """One JSON log line per request, with an id the client can quote in a bug report."""
+    """One JSON log line per request, with an id the client can quote in a bug report, plus a trace
+    line with a span per data-source call. A caller's W3C traceparent header is continued."""
     rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    trace = tracing.Trace(f"{request.method} {request.url.path}", request.headers.get("traceparent"), rid)
+    trace.root.attrs.update(method=request.method, path=request.url.path)
+    request.state.trace = trace
     start = time.monotonic()
     status = 500
     try:
-        response = await call_next(request)
+        with tracing.use(trace):
+            response = await call_next(request)
         status = response.status_code
         response.headers["x-request-id"] = rid
+        response.headers["traceparent"] = trace.traceparent
         return response
     finally:
         ms = round((time.monotonic() - start) * 1000, 1)
+        trace.root.attrs["status"] = status
         with _lock:
             _requests[f"{request.url.path} {status}"] += 1
-        log.info(json.dumps({"event": "request", "id": rid, "method": request.method, "path": request.url.path,
-                             "status": status, "ms": ms}))
+        log.info(json.dumps({"event": "request", "id": rid, "trace_id": trace.trace_id, "method": request.method,
+                             "path": request.url.path, "status": status, "ms": ms}))
+        done = tracing.finish(trace)
+        if len(done["spans"]) > 1:   # only requests that called a data source are worth a trace line
+            log.info(json.dumps({"event": "trace", **done}))
 
 
 def _client_ip(request: Request) -> str:
@@ -114,7 +127,30 @@ def metrics() -> dict:
     with _lock:
         reqs = dict(_requests)
     return {"uptime_s": round(time.time() - STARTED), "requests": reqs,
-            "sources": {s.name: s.stats.as_dict() for s in sources.all()}}
+            "sources": {s.name: s.stats.as_dict() for s in sources.all()}, "data": _data_freshness()}
+
+
+def _data_freshness() -> dict:
+    """How old the data behind the answers is: the cost file and each published rules file."""
+    out: dict = {"costs": None, "rules": []}
+    try:
+        c = json.loads((MAP_DIR / "data" / "ri-costs.json").read_text())
+        out["costs"] = {"built_at": c.get("built_at"), "fema_snapshot": c.get("flood", {}).get("snapshot"),
+                        "window": c.get("flood", {}).get("window"), "homeowners_year": c.get("homeowners", {}).get("year")}
+    except (OSError, ValueError):
+        pass
+    for prov, p in store.load_all():
+        out["rules"].append({"program": f"{p.insurer} / {p.program}", "extracted_at": prov["extracted"]["at"],
+                             "model": prov["extracted"].get("model"), "source_published": prov["source"].get("published"),
+                             "file": prov["file"]})
+    return out
+
+
+@app.get("/traces")
+def traces(limit: int = Query(20, ge=1, le=tracing.RECENT_TRACES), path: str | None = None) -> list[dict]:
+    """Recent request traces, newest first. Only requests that called a data source are kept useful;
+    filter with path=/property for map lookups."""
+    return tracing.recent(limit, path)
 
 
 @app.get("/property", response_model=PropertyReport)
@@ -125,7 +161,9 @@ def property_report(request: Request, lat: float = Query(..., ge=-90, le=90), ln
     if year not in YEARS:
         raise HTTPException(422, f"year must be one of {', '.join(YEARS)}")
     _rate_limit(_client_ip(request))
-    report = assess(lat, lng, sources, [p for _, p in store.load_all()], year=year)
+    # FastAPI runs this sync handler in a worker thread, which doesn't inherit the request's trace
+    with tracing.use(getattr(request.state, "trace", None)):
+        report = assess(lat, lng, sources, [p for _, p in store.load_all()], year=year)
     failed = [s.name for s in report.sources if not s.ok]
     if failed:
         log.warning(json.dumps({"event": "source_failed", "sources": failed, "lat": round(lat, 3), "lng": round(lng, 3)}))

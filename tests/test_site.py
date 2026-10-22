@@ -28,3 +28,9 @@ def test_api_is_mounted_under_api(client):
 def test_map_file_also_served_by_name(client):
     assert client.get("/rhode-island-flood-map.html").status_code == 200
     assert client.get("/missing.html").status_code == 404
+
+
+def test_status_page_is_served(client):
+    r = client.get("/status")
+    assert r.status_code == 200 and "<title>Flood Outlook Status</title>" in r.text
+    assert "fetch(API+\"/metrics\")" in r.text

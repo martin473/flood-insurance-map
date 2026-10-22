@@ -60,6 +60,9 @@ jobs:
           echo "check: map points at /api"; curl -fsS localhost:8080/ | grep -q 'name="flood-api" content="/api"'
           echo "check: /api/metrics"; curl -fsS localhost:8080/api/metrics | grep -q '"fema_nfhl"'
           echo "check: neighbor-cost data"; curl -fsS localhost:8080/data/ri-costs.json | grep -q '"tract"'
+          echo "check: status page"; curl -fsS localhost:8080/status -o status.html && grep -q '<title>Flood Outlook Status</title>' status.html
+          echo "check: traces endpoint"; curl -fsS localhost:8080/api/traces | grep -q '^\['
+          echo "check: traceparent header"; curl -fsS -D headers.txt -o /dev/null localhost:8080/api/health && grep -qi '^traceparent: 00-' headers.txt
           echo "check: service restarts on failure"; sudo systemctl kill flood-insurance-map; sleep 6; curl -fsS localhost:8080/api/health | grep -q '"ok":true'
           echo "check: rerunning updates in place"; sudo -H env REF=${{ github.sha }} bash droplet.sh | tail -3
       - if: failure()

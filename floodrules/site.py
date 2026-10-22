@@ -2,6 +2,7 @@
 
   uvicorn floodrules.site:app --port 8080
 
+/status is a page showing each data source's health, recent lookups and data freshness.
 The map looks for the API at /api on the same address, so this is all a server needs:
 no separate web server. FLOODRULES_MAP_DIR points at the map folder (default: <repo>/map).
 """
@@ -26,6 +27,11 @@ app = FastAPI(title="Rhode Island Flood Outlook", docs_url=None, redoc_url=None,
 @app.get("/", include_in_schema=False)
 def map_page() -> FileResponse:
     return FileResponse(MAP_DIR / MAP_PAGE, media_type="text/html")
+
+
+@app.get("/status", include_in_schema=False)
+def status_page() -> FileResponse:
+    return FileResponse(MAP_DIR / "status.html", media_type="text/html")
 
 
 @app.get("/api", include_in_schema=False)

@@ -118,3 +118,41 @@ def test_extract_fails_closed_when_token_required_but_unset(client, guide_pdf, m
     monkeypatch.setenv("FLOODRULES_REQUIRE_ADMIN", "1")
     r = client.post("/extract", files={"file": ("g.pdf", guide_pdf.read_bytes(), "application/pdf")})
     assert r.status_code == 503 and "FLOODRULES_ADMIN_TOKEN" in r.json()["detail"]
+
+
+def test_traceparent_is_returned_and_continued(live):
+    from floodrules import tracing
+    tracing.clear()
+    parent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+    r = live.get("/property", params={"lat": 41.3260, "lng": -71.7920}, headers={"traceparent": parent})
+    assert r.status_code == 200
+    assert r.headers["traceparent"].startswith("00-4bf92f3577b34da6a3ce929d0e0e4736-")
+    traces = live.get("/traces", params={"path": "/property"}).json()
+    assert traces[0]["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736" and traces[0]["attrs"]["status"] == 200
+    names = {s["name"] for s in traces[0]["spans"]}
+    assert {"lookups", "fema_nfhl", "usfws_cbrs", "uri_stormtools", "nominatim"} <= names
+    # polling the status endpoints doesn't push lookups out of the recent list
+    live.get("/metrics")
+    live.get("/traces")
+    assert all(t["attrs"]["path"] == "/property" for t in live.get("/traces").json())
+
+
+def test_metrics_report_percentiles_and_data_freshness(live):
+    live.get("/property", params={"lat": 41.3260, "lng": -71.7920})
+    m = live.get("/metrics").json()
+    fema = m["sources"]["fema_nfhl"]
+    assert fema["p50_ms"] is not None and fema["p95_ms"] is not None and fema["cache_hit_rate"] is not None
+    assert m["data"]["costs"]["fema_snapshot"] and m["data"]["costs"]["window"]["from"]
+    assert m["data"]["rules"] == []   # the test's rules folder is empty
+
+
+def test_cached_lookup_meets_the_latency_budget(live):
+    """With the sources answering from cache, /property must answer in under 2 seconds, so a slow
+    change in our own code shows up in CI rather than on the map."""
+    import time
+    params = {"lat": 41.3260, "lng": -71.7920}
+    assert live.get("/property", params=params).status_code == 200      # warms the cache
+    start = time.monotonic()
+    r = live.get("/property", params=params)
+    elapsed = time.monotonic() - start
+    assert r.status_code == 200 and elapsed < 2.0, f"cached lookup took {elapsed:.2f}s"

@@ -15,6 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from . import tracing
 from .engine import Decision, PropertyFacts, Status, evaluate_all
 from .schemas import Product
 from .sources import SCENARIOS, SourceError, Sources, iso
@@ -71,10 +72,18 @@ def _safe(fn, *args):
 def assess(lat: float, lng: float, sources: Sources, products: list[Product], year: str = "2056") -> PropertyReport:
     if year not in YEARS:
         raise ValueError(f"year must be one of {', '.join(YEARS)}")
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futs = {name: pool.submit(_safe, fn, lat, lng) for name, fn in (
-            ("fema", sources.fema_zone), ("cbrs", sources.cbrs_unit), ("storm", sources.storm_depths), ("town", sources.town_name))}
-        res = {k: f.result() for k, f in futs.items()}
+    with tracing.span("lookups", year=year) as sp:
+        cur = tracing.current()
+
+        def run(fn):
+            # worker threads don't inherit the request's trace, so hand it over explicitly
+            with tracing.use(cur[0] if cur else None, sp):
+                return _safe(fn, lat, lng)
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futs = {name: pool.submit(run, fn) for name, fn in (
+                ("fema", sources.fema_zone), ("cbrs", sources.cbrs_unit), ("storm", sources.storm_depths), ("town", sources.town_name))}
+            res = {k: f.result() for k, f in futs.items()}
     fema, fema_err = res["fema"]
     cbrs, cbrs_err = res["cbrs"]
     depths, storm_err = res["storm"]

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flood Outlook Status</title>
+<meta name="flood-api" content="/api">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f4f7f8; --panel:#ffffff; --fg:#14232b; --muted:#56686f; --line:#d8e1e4;
+  --accent:#0b5874; --ok:#2f7d4f; --warn:#a86a00; --bad:#be185d;
+  --s1:#0b5874; --s2:#4b47a3; --s3:#2f7d4f; --s4:#a86a00;
+  --display:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f171b; --panel:#162228; --fg:#e3ebee; --muted:#93a4ab; --line:#29373e;
+  --accent:#62b4d4; --ok:#5fbf86; --warn:#e0a94a; --bad:#f472b6;
+  --s1:#62b4d4; --s2:#9d99e6; --s3:#5fbf86; --s4:#e0a94a; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f171b; --panel:#162228; --fg:#e3ebee; --muted:#93a4ab; --line:#29373e;
+  --accent:#62b4d4; --ok:#5fbf86; --warn:#e0a94a; --bad:#f472b6; --s1:#62b4d4; --s2:#9d99e6; --s3:#5fbf86; --s4:#e0a94a; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--display)}
+main{max-width:980px;margin:0 auto;padding:28px 16px 48px;display:flex;flex-direction:column;gap:28px}
+h1{font-size:1.6rem;font-weight:800;margin:0;line-height:1.15}
+h2{font-size:1.05rem;font-weight:700;margin:0 0 4px}
+.lede,.note{color:var(--muted);margin:4px 0 0;font-size:.92rem}
+a{color:var(--accent)}
+.banner{border:1px solid var(--line);border-left:6px solid var(--ok);background:var(--panel);border-radius:8px;padding:14px 16px;font-weight:600}
+.banner.warn{border-left-color:var(--warn)} .banner.bad{border-left-color:var(--bad)} .banner.unk{border-left-color:var(--line)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{text-align:left;padding:7px 10px 7px 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td small{display:block;color:var(--muted);font-size:.78rem}
+.chip{display:inline-block;font-size:.74rem;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.c-ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.c-warn{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.c-bad{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.c-unk{background:var(--line);color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.8rem;color:var(--muted);margin:8px 0 10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.wf{display:grid;grid-template-columns:150px 1fr 70px;gap:6px 10px;align-items:center;font-size:.82rem}
+.wf .when{font-family:var(--mono);color:var(--muted);white-space:nowrap}
+.wf .tot{font-family:var(--mono);text-align:right}
+.track{position:relative;height:32px;background:color-mix(in srgb,var(--line) 45%,transparent);border-radius:4px;overflow:hidden}
+.bar{position:absolute;height:6px;border-radius:2px;min-width:2px}
+.bar.hit{opacity:.35}
+.bar.err{background:var(--bad)!important;opacity:1}
+.empty{color:var(--muted);font-size:.9rem;margin:6px 0 0}
+.mono{font-family:var(--mono);font-size:.84rem;white-space:nowrap}
+@media (max-width:640px){.wf{grid-template-columns:1fr 64px}.wf .when{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Flood Outlook status</h1>
+    <p class="lede">The public data services behind each answer, how they're responding, and how fresh the data is. From this server's <a href="/api/metrics">/api/metrics</a> and <a href="/api/traces?path=/property">/api/traces</a>, refreshed every 30 seconds. <a href="/">Back to the map</a>.</p>
+  </header>
+
+  <div class="banner unk" id="banner" aria-live="polite">Loading…</div>
+
+  <section>
+    <h2>Data sources</h2>
+    <p class="note">Since the server last started. A source shows errors if a call failed in the last 15 minutes, after its retries.</p>
+    <div class="scroll"><table id="sources"><thead><tr>
+      <th>Source</th><th>Status</th><th class="num">Calls</th><th class="num">From cache</th><th class="num">Errors</th>
+      <th class="num">Typical</th><th class="num">Slowest 5%</th><th>Last error</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>Recent map lookups</h2>
+    <p class="note">Each row is one lookup; each bar is one call to a data source, placed where it started and as long as it took. Faded bars came from the cache; pink bars failed.</p>
+    <div class="legend" id="legend"></div>
+    <div class="wf" id="lookups"></div>
+  </section>
+
+  <section>
+    <h2>Data freshness</h2>
+    <div class="scroll"><table id="fresh"><thead><tr><th>Data</th><th>As of</th><th>Details</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>Requests</h2>
+    <p class="note" id="uptime"></p>
+    <div class="scroll"><table id="requests"><thead><tr><th>Route</th><th class="num">Status</th><th class="num">Count</th></tr></thead><tbody></tbody></table></div>
+  </section>
+</main>
+<script>
+(function(){
+  var API=(document.querySelector('meta[name="flood-api"]')||{}).content||"/api";
+  var SOURCES={
+    fema_nfhl:{name:"FEMA flood maps (NFHL)",what:"Flood zone, floodway",color:"var(--s1)"},
+    uri_stormtools:{name:"URI STORMTOOLS",what:"Storm flood depth by sea level",color:"var(--s2)"},
+    usfws_cbrs:{name:"USFWS coastal barriers",what:"Coastal barrier units",color:"var(--s3)"},
+    nominatim:{name:"OpenStreetMap Nominatim",what:"Town for island rules",color:"var(--s4)"}
+  };
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+  function pct(x){return x==null?"–":Math.round(x*100)+"%";}
+  function ms(x){return x==null?"–":(x>=1000?(x/1000).toFixed(1)+" s":Math.round(x)+" ms");}
+  function ago(iso){
+    if(!iso) return "";
+    var s=(Date.now()-Date.parse(iso))/1000;
+    if(!isFinite(s)) return "";
+    if(s<90) return "just now"; if(s<5400) return Math.round(s/60)+" min ago";
+    if(s<172800) return Math.round(s/3600)+" h ago"; return Math.round(s/86400)+" days ago";
+  }
+  function day(iso){return iso?String(iso).slice(0,10):"–";}
+  function state(st){
+    if(!st.calls) return ["unk","No calls yet"];
+    var recent=st.last_error_at && (Date.now()-Date.parse(st.last_error_at))<15*60*1000;
+    if(recent) return [st.error_rate>0.5?"bad":"warn","Errors"];
+    return ["ok","Answering"];
+  }
+
+  document.getElementById("legend").innerHTML=Object.keys(SOURCES).map(function(k){
+    return '<span><i style="background:'+SOURCES[k].color+'"></i>'+esc(SOURCES[k].name)+'</span>';}).join("");
+
+  function drawSources(m){
+    var rows=Object.keys(SOURCES).map(function(k){
+      var st=m.sources[k]||{}, s=state(st);
+      return [k,st,s];
+    });
+    document.querySelector("#sources tbody").innerHTML=rows.map(function(r){
+      var k=r[0], st=r[1], s=r[2];
+      return '<tr><td>'+esc(SOURCES[k].name)+'<small>'+esc(SOURCES[k].what)+'</small></td>'+
+        '<td><span class="chip c-'+s[0]+'">'+s[1]+'</span></td>'+
+        '<td class="num">'+(st.calls||0)+'</td><td class="num">'+pct(st.cache_hit_rate)+'</td>'+
+        '<td class="num">'+pct(st.calls?st.error_rate:null)+'</td><td class="num">'+ms(st.p50_ms)+'</td><td class="num">'+ms(st.p95_ms)+'</td>'+
+        '<td>'+(st.last_error?esc(st.last_error)+'<small>'+esc(ago(st.last_error_at))+'</small>':'<small>none</small>')+'</td></tr>';
+    }).join("");
+    var bad=rows.filter(function(r){return r[2][0]==="bad"||r[2][0]==="warn";});
+    var b=document.getElementById("banner");
+    if(rows.every(function(r){return r[2][0]==="unk";})){ b.className="banner unk"; b.textContent="No lookups since the server started. Tap a spot on the map to wake the data sources."; }
+    else if(!bad.length){ b.className="banner"; b.textContent="All data sources are answering."; }
+    else { b.className="banner "+(bad.some(function(r){return r[2][0]==="bad";})?"bad":"warn");
+      b.textContent=bad.map(function(r){return SOURCES[r[0]].name;}).join(", ")+(bad.length>1?" are":" is")+
+        " failing. The map still answers what it can and marks the rest “couldn't check.”"; }
+  }
+
+  function drawLookups(traces){
+    var el=document.getElementById("lookups");
+    if(!traces.length){ el.innerHTML='<p class="empty" style="grid-column:1/-1">No map lookups since the server started.</p>'; return; }
+    el.innerHTML=traces.map(function(t){
+      var total=t.ms||1;
+      var bars=t.spans.filter(function(s){return SOURCES[s.name];}).map(function(s,i,all){
+        var lane=Object.keys(SOURCES).indexOf(s.name);
+        var left=Math.min(99,(s.start_ms/total)*100), width=Math.max(0.6,((s.ms||0)/total)*100);
+        var hit=s.attrs&&s.attrs.cache_hit, err=!!s.error;
+        var tip=SOURCES[s.name].name+": "+ms(s.ms)+(hit?" (cache)":"")+(s.attrs&&s.attrs.attempts>1?", "+s.attrs.attempts+" attempts":"")+(err?", "+s.error:"");
+        return '<span class="bar'+(hit?" hit":"")+(err?" err":"")+'" title="'+esc(tip)+'" style="left:'+left.toFixed(2)+'%;width:'+width.toFixed(2)+
+          '%;top:'+(2+lane*7)+'px;background:'+SOURCES[s.name].color+'"></span>';
+      }).join("");
+      var when=new Date(t.at*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"});
+      var status=t.attrs&&t.attrs.status;
+      return '<span class="when">'+esc(when)+(status&&status!==200?' <span class="chip c-bad">'+esc(status)+'</span>':'')+'</span>'+
+        '<div class="track" role="img" aria-label="'+esc("Lookup at "+when+", "+ms(t.ms))+'">'+bars+'</div><span class="tot">'+ms(t.ms)+'</span>';
+    }).join("");
+  }
+
+  function drawFresh(d){
+    var rows=[];
+    if(d.costs){
+      rows.push(['What neighbors paid: flood', day(d.costs.fema_snapshot), 'FEMA policy snapshot; policies starting '+day(d.costs.window&&d.costs.window.from)+' to '+day(d.costs.window&&d.costs.window.to)+'. Rebuilt '+ago(d.costs.built_at)+'.']);
+      rows.push(['What neighbors paid: homeowners', String(d.costs.homeowners_year||"–"), 'Treasury ZIP-level premiums, the latest year published.']);
+    } else rows.push(['What neighbors paid','–','Cost data file not found on this server.']);
+    (d.rules||[]).forEach(function(r){
+      rows.push(['Insurer rules: '+r.program, day(r.extracted_at), 'Extracted with '+(r.model||"a model")+' from a document published '+(r.source_published||"on an unknown date")+'.']);
+    });
+    if(!(d.rules||[]).length) rows.push(['Insurer rules','–','No reviewed rules loaded; the map shows the federal program only.']);
+    document.querySelector("#fresh tbody").innerHTML=rows.map(function(r){
+      return '<tr><td>'+esc(r[0])+'</td><td class="mono">'+esc(r[1])+'</td><td>'+esc(r[2])+'</td></tr>';}).join("");
+  }
+
+  function drawRequests(m){
+    var up=m.uptime_s, txt=up<3600?Math.round(up/60)+" minutes":up<172800?(up/3600).toFixed(1)+" hours":Math.round(up/86400)+" days";
+    document.getElementById("uptime").textContent="Server up for "+txt+". Counts since it started.";
+    var rows=Object.keys(m.requests||{}).map(function(k){var i=k.lastIndexOf(" ");return [k.slice(0,i),k.slice(i+1),m.requests[k]];})
+      .sort(function(a,b){return b[2]-a[2];});
+    document.querySelector("#requests tbody").innerHTML=rows.map(function(r){
+      return '<tr><td class="mono">'+esc(r[0])+'</td><td class="num">'+esc(r[1])+'</td><td class="num">'+r[2]+'</td></tr>';}).join("")||
+      '<tr><td colspan="3" class="empty">No requests yet.</td></tr>';
+  }
+
+  function refresh(){
+    Promise.all([fetch(API+"/metrics").then(function(r){if(!r.ok)throw new Error(r.status);return r.json();}),
+                 fetch(API+"/traces?path=/property&limit=10").then(function(r){return r.ok?r.json():[];}).catch(function(){return [];})])
+      .then(function(x){ drawSources(x[0]); drawLookups(x[1]); drawFresh(x[0].data||{}); drawRequests(x[0]); })
+      .catch(function(){ var b=document.getElementById("banner"); b.className="banner bad"; b.textContent="The API on this server isn't answering."; });
+  }
+  refresh(); setInterval(refresh,30000);
+})();
+</script>
+</body>
+</html>

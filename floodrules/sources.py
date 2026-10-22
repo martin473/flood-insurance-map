@@ -17,11 +17,15 @@ import os
 import statistics
 import threading
 import time
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Callable
 
 import requests
+
+from . import tracing
 
 FEMA = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query"
 CBRS = "https://gis1.wim.usgs.gov/server/rest/services/CBRSMapper/CoastalBarrierResourcesSystem/MapServer/1/query"
@@ -61,12 +65,20 @@ class Stats:
     max_ms: float = 0.0
     last_error: str | None = None
     last_error_at: str | None = None
+    recent_ms: deque = field(default_factory=lambda: deque(maxlen=200))   # latency of the last 200 network calls
 
     def as_dict(self) -> dict:
         made = self.calls - self.cache_hits
+        lat = sorted(self.recent_ms)
+
+        def pct(q: float) -> float | None:
+            return round(lat[min(len(lat) - 1, int(q * len(lat)))], 1) if lat else None
+
         return {"calls": self.calls, "cache_hits": self.cache_hits, "errors": self.errors, "retries": self.retries,
                 "error_rate": round(self.errors / made, 3) if made else 0.0,
+                "cache_hit_rate": round(self.cache_hits / self.calls, 3) if self.calls else None,
                 "avg_ms": round(self.total_ms / made, 1) if made else None, "max_ms": round(self.max_ms, 1),
+                "p50_ms": pct(0.5), "p95_ms": pct(0.95),
                 "last_error": self.last_error, "last_error_at": self.last_error_at}
 
 
@@ -84,13 +96,22 @@ class Source:
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def get(self, params: dict[str, Any]) -> Any:
+        """A cached, retried call, traced as a child span of the current request when there is one."""
+        with tracing.span(self.name) as sp:
+            return self._get(params, sp)
+
+    def _get(self, params: dict[str, Any], sp: tracing.Span | None) -> Any:
         key = json.dumps(params, sort_keys=True)
         with self._lock:
             self.stats.calls += 1
             hit = self._cache.get(key)
             if hit and hit[0] > time.monotonic():
                 self.stats.cache_hits += 1
+                if sp:
+                    sp.attrs.update(cache_hit=True)
                 return hit[1]
+        if sp:
+            sp.attrs.update(cache_hit=False)
         headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
         last = ""
         for attempt in range(self.retries + 1):
@@ -102,6 +123,8 @@ class Source:
                 if status == 200:
                     with self._lock:
                         self._cache[key] = (time.monotonic() + self.ttl_s, data)
+                    if sp:
+                        sp.attrs.update(attempts=attempt + 1, status=200)
                     return data
                 last = f"HTTP {status}"
                 if status not in (429, 500, 502, 503, 504):
@@ -117,12 +140,15 @@ class Source:
             self.stats.errors += 1
             self.stats.last_error = last
             self.stats.last_error_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        if sp:
+            sp.attrs.update(attempts=attempt + 1, outcome=last)
         raise SourceError(f"{self.name}: {last}")
 
     def _timing(self, ms: float) -> None:
         with self._lock:
             self.stats.total_ms += ms
             self.stats.max_ms = max(self.stats.max_ms, ms)
+            self.stats.recent_ms.append(ms)
 
 
 def _point(lat: float, lng: float) -> dict[str, Any]:
@@ -173,14 +199,12 @@ class Sources:
         dl, dg = 0.00018, 0.00024
         offsets = [(0, 0), (dl, 0), (-dl, 0), (0, dg), (0, -dg), (dl, dg), (-dl, -dg), (dl, -dg), (-dl, dg)]
         geometry = json.dumps({"points": [[lng + o[1], lat + o[0]] for o in offsets], "spatialReference": {"wkid": 4326}})
-        out = []
-        for raster_id, _, _ in SCENARIOS:
+        def one(raster_id: int) -> float:
             data = self.storm.get({"geometry": geometry, "geometryType": "esriGeometryMultipoint", "returnFirstValueOnly": "true",
                                    "mosaicRule": json.dumps({"mosaicMethod": "esriMosaicLockRaster", "lockRasterIds": [raster_id]}),
                                    "f": "json"})
             if isinstance(data, dict) and data.get("error"):
-                out.append(0.0)   # STORMTOOLS answers with an error when every sample is no-data: dry
-                continue
+                return 0.0   # STORMTOOLS answers with an error when every sample is no-data: dry
             center, around = None, []
             for s in data.get("samples", []):
                 try:
@@ -194,8 +218,18 @@ class Sources:
                 else:
                     around.append(v)
             value = center if center is not None else (statistics.median(around) if around else 0.0)
-            out.append(round(value, 1))
-        return out
+            return round(value, 1)
+
+        # the six scenarios are independent, so ask for them in parallel; traces showed them running
+        # one after another and making up most of an uncached lookup's time
+        cur = tracing.current()
+
+        def traced(raster_id: int) -> float:
+            with tracing.use(cur[0] if cur else None, cur[1] if cur else None):
+                return one(raster_id)
+
+        with ThreadPoolExecutor(max_workers=len(SCENARIOS)) as pool:
+            return list(pool.map(traced, [raster_id for raster_id, _, _ in SCENARIOS]))
 
     def town_name(self, lat: float, lng: float) -> str:
         data = self.town.get({"format": "json", "lat": round(lat, 5), "lon": round(lng, 5), "zoom": 12, "addressdetails": 1})
