@@ -1,6 +1,6 @@
 # Will it flood, and can I insure it? Building a flood map with an AI agent
 
-*Draft. Eval numbers are from [one GitHub Actions run](https://github.com/martin473/flood-insurance-map/actions/runs/39703488854), October 21, 2026.*
+*Draft. Eval numbers are from [one GitHub Actions run](https://github.com/martin473/flood-insurance-map/actions/runs/39705882557), October 21, 2026.*
 
 I wanted a map for Rhode Island homeowners: projected flooding on top of the flood insurance maps. I built it with an AI coding agent over a day and a half. This post is about the decisions, because the agent wrote most of the code and the interesting part was deciding what to keep.
 
@@ -38,7 +38,9 @@ That got verified recall to **90%** and precision to **79%**.
 
 **The model did math.** A brochure says loss of use is 20% of the dwelling limit. The model wrote "$450,000," which is 20% of $2.25M. The rule passed the quote check because "20% of dwelling" really is in the document. The fix was a second check: a dollar limit only counts if the amount appears in its quote.
 
-**The same run doesn't give the same score.** The same model, prompt and documents scored 90% recall on my laptop and 81% in CI, even at temperature 0. A single eval number from a cloud model can be off by about 10 points, so the eval now repeats each run and reports a mean and range. On the final run over 8 real insurer documents, **gemma4 31B scored 96% precision and 87% recall, the same in all 3 runs**. gpt-oss 120B, a model four times its size, scored 89% precision and 73% recall, ranging from 66% to 86% across the same 3 runs. Bigger was slower, less accurate and less consistent.
+**The same run doesn't give the same score.** The same model, prompt and documents scored 90% recall on my laptop and 81% in CI, even at temperature 0. A single eval number from a cloud model can be off by about 10 points, so the eval now repeats each run and reports a mean and range. On the final run over 10 real insurer documents, **gemma4 31B scored 97% precision and 96% recall, the same in all 3 runs**. gpt-oss 120B, a model four times its size, scored 84% precision and 64% recall, ranging from 60% to 71% across the same 3 runs. Bigger was slower, less accurate and less consistent.
+
+**The safety check was throwing away good answers.** The rule that every extracted rule must quote the document also required quotes of three words or more, so a common word couldn't vouch for anything. Comparison tables put one value per cell, so "$1,250,000" and "Condominiums" were rejected every time, costing 9 points of recall. I only saw it after making the verifier report the closest passage in the document for each rejection. Short quotes now pass when they state the claim itself, and the check costs one point.
 
 ## A data gap that would have told someone the wrong thing
 

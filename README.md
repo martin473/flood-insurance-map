@@ -70,18 +70,18 @@ Each product is flattened into atomic facts (`location:cbrs`, `state:all_except:
 
 For Ollama models the report shows latency and token counts; there's no per-token cost. The comparison worth making is size against accuracy: does a bigger model beat a smaller one by enough to justify the slower run, and how many invented quotes does the verifier catch from each? Check your plan's usage limits on ollama.com before a large run. For Claude, `--repeat 2` runs each document twice; the second run reads the document from the prompt cache, so the report shows the cost with and without caching. Results go to `evals/runs/<timestamp>.json` and `evals/runs/latest.md`.
 
-**Eval set.** Nine public insurer documents in `evals/sources.json`, labeled in `evals/labels/` and checked line by line against each document's text: carrier brochures and guides (Hiscox 2020 and 2024, MSI 2025, Neptune 2023), broker comparison sheets (RT Specialty 2022 and 2023, Burns & Wilcox 2025, QuickHome) and an MSI comparison with the NFIP. Neptune's sheet refuses downloads from GitHub's servers (HTTP 403), so CI scores the other eight.
+**Eval set.** Twelve public insurer documents in `evals/sources.json`, labeled in `evals/labels/` and checked line by line against each document's text: carrier brochures, guides and training decks (Hiscox 2020 and 2024, MSI 2025 and its September 2025 training deck, Neptune 2023, Palomar 2024, reThought 2024), broker comparison sheets (RT Specialty 2022 and 2023, Burns & Wilcox 2025, QuickHome) and an MSI comparison with the NFIP. Neptune's and reThought's sites refuse downloads from GitHub's servers (HTTP 403), so CI scores the other ten. `floodrules text` (and the doctext workflow) prints a document's text exactly as the verifier sees it, for writing labels.
 
-**Results** ([run 39703488854](https://github.com/martin473/flood-insurance-map/actions/runs/39703488854), October 21, 2026; 8 documents, 3 runs, mean with lowest–highest):
+**Results** ([run 39705882557](https://github.com/martin473/flood-insurance-map/actions/runs/39705882557), October 21, 2026; 10 documents, 12 programs, 3 runs, mean with lowest–highest):
 
 | Model | Precision (verified) | Recall (verified) | F1 (verified) | Seconds per document | Tokens per document (in / out) |
 |---|---|---|---|---|---|
-| gemma4 31B | 96% | 87% | 91% | 3.2 | 2,855 / 685 |
-| gpt-oss 120B | 89% (88–90%) | 73% (66–86%) | 80% (76–88%) | 6.8 | 2,733 / 2,382 |
+| gemma4 31B | 97% | 96% | 96% | 2.0 | 2,810 / 757 |
+| gpt-oss 120B | 84% (82–85%) | 64% (60–71%) | 73% (69–77%) | 5.3 | 2,696 / 2,573 |
 
-Both run on Ollama Cloud's free plan, so there's no per-document cost. The smaller model is more accurate and gave the same answer in all three runs. Where it misses: dollar limits (55% recall), flood-zone rules (67%) and building exclusions (73%); it finds every state rule and availability statement.
+Both run on Ollama Cloud's free plan, so there's no per-document cost. The smaller model is more accurate and gave the same answer in all three runs. Its weakest area is flood-zone rules (67% recall); it finds every availability statement, state, building exclusion and scalar rule.
 
-On this set the quote check doesn't raise precision (gemma4: 96% before and after) but costs 9 points of recall: it rejects some correct rules, mostly limits quoted from comparison tables whose extracted text order doesn't match the quote. Matching quotes inside tables more loosely is the next improvement.
+**What the quote check costs.** On the [previous run](https://github.com/martin473/flood-insurance-map/actions/runs/39703488854) it cost gemma4 9 points of recall: every rejection was "quote too short to verify", and every rejected quote was a real table cell ("$1,250,000", "Condominiums", "ICC $30K"). A one- or two-word quote now verifies when it's in the document and states the claim itself (a limit's amount, or the term for an exclusion's kind); a bare "Yes" still fails. It now costs gemma4 one point. What it still rejects are stitched quotes, a row label joined to a number from another column ("Building $1.9M" where the text reads "Building $1.25M combined building/content limit $1.9M"). The number may be right, but the check can't tell which column it came from, so those stay rejected. Each rejection in the report shows the closest passage in the document, which is how this was diagnosed.
 
 ## What neighbors paid
 

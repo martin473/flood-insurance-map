@@ -2,11 +2,11 @@
 
 **Goal:** a resume line backed by numbers that hold up in an interview, for applied-AI roles in fintech and insurance:
 
-> Built a Python/FastAPI service that extracts flood insurers' eligibility rules from PDFs into typed schemas with an LLM, rejects any rule it can't trace to a quote in the source, and scores itself against 8 hand-labeled documents (96% precision, 87% recall, mean of 3 runs) in CI. Deployed behind a public Rhode Island flood and insurance map, with request logging and per-source error tracking.
+> Built a Python/FastAPI service that extracts flood insurers' eligibility rules from PDFs into typed schemas with an LLM, rejects any rule it can't trace to a quote in the source, and scores itself against 10 hand-labeled documents (97% precision, 96% recall, mean of 3 runs) in CI. Deployed behind a public Rhode Island flood and insurance map, with request logging and per-source error tracking.
 
 Each phase closes one gap from the job-posting review: production Python, an eval harness, operating what you ship, and showing judgment when building with an agent.
 
-**Status, October 21, 2026:** Phases 1 to 3 are done and deployed. The final eval ([run](https://github.com/martin473/flood-insurance-map/actions/runs/39703488854)): gemma4 31B 96% precision, 87% recall; gpt-oss 120B 89%, 73%. The next steps are in the design doc: saved reports, contract and browser tests, a status page, alerts.
+**Status, October 21, 2026:** Phases 1 to 3 are done and deployed. The final eval ([run](https://github.com/martin473/flood-insurance-map/actions/runs/39705882557), 10 documents): gemma4 31B 97% precision, 96% recall; gpt-oss 120B 84%, 64%. The next steps are in the design doc: saved reports, contract and browser tests, a status page, alerts.
 
 ## Phase 1: Trustworthy eval numbers
 
@@ -15,7 +15,7 @@ Each phase closes one gap from the job-posting review: production Python, an eva
 | A dollar limit only counts if its amount appears in its quote | Claude | Done |
 | `--runs N`: repeat the eval and report mean, min and max | Claude | Done, in the CLI and the CI eval workflow |
 | Check every label against its PDF | Sawyer + Claude | Done: all 9 label files checked against the document text |
-| Rerun: 3 runs per model, at least 2 models | Claude (CI) | Done: [run 39703488854](https://github.com/martin473/flood-insurance-map/actions/runs/39703488854), 8 documents |
+| Rerun: 3 runs per model, at least 2 models | Claude (CI) | Done: [run 39705882557](https://github.com/martin473/flood-insurance-map/actions/runs/39705882557), 10 documents |
 
 ## Phase 2: A bigger eval set
 
